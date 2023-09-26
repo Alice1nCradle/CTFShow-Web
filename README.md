@@ -1,5 +1,5 @@
 # CTFShow-Web
-The collection of CTFShow-Web's writeup, environment and attachment.
+The collection of CTFShow-Web's writeup and attachment.
 
 ## Web入门
 
