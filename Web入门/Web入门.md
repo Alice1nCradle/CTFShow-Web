@@ -1215,9 +1215,44 @@ print(base64.b64decode(flag))
 
 最后解码得到flag的值
 
-![](F:\CTFShow-Web\Web入门\SQL注入\web174\web174.png)
+![](.\SQL注入\web174\web174.png)
 
 
+
+### web175
+
+虽然正则匹配过滤了所有ASCII值的回显，但这并不意味着注入点不能看，毕竟无显示和异常还是有区别的。
+
+然后关于不回显的事情，将内容输出到别的文件里访问就是了。
+
+1. 测试发现1‘ 即可闭合代码
+2. 经过order by测试，这次的数据库只有两段
+3. 这都不需要测试回显了，就两行，图中有三行，怎么都显示。
+4. 由于不回显，我们只能将其输出到另外的文件中查看，构造payload:1' union select 1,password from ctfshow_user5 into outfile '/var/www/html/1.txt'%23，也就是将查询的结果输出到/var/www/html/1.txt的文件中，待会儿我们访问便是。
+
+这不就找到了吗？
+
+![](.\SQL注入\web175.png)
+
+### web176
+
+从现在开始，有字符过滤了，开始学习绕过姿势。
+
+过滤了`select`，通过大小写即可绕过 。order by检查有3行，那就开始吧。
+
+直接构造payload:1' union SELect 1,2,3%23，很好三段均回显。
+
+根据题目所给提示，直接
+
+```
+1' union sElect id,username,password from ctfshow_user%23
+```
+
+拿到flag
+
+![](.\SQL注入\web176.png)
+
+另解：万能密码'1 or 1=1%23
 
 
 
